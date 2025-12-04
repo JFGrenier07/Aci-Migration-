@@ -1,0 +1,20 @@
+---
+# Liste des EPG à extraire
+# Noms EXACTS depuis l'ACI
+
+tenant: Production
+ap: Database_AP
+epgs:
+  - DBServers_EPG
+
+---
+tenant: Production
+ap: ERP_AP
+epgs:
+  - AppServers_EPG
+
+---
+tenant: Development
+ap: DevApp_AP
+epgs:
+  - DevApp_EPG

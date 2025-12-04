@@ -1,0 +1,33 @@
+# Fichiers générés - ne pas versionner
+csv_out/*.csv
+epg_migration.xlsx
+*.xlsx
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environnements virtuels
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Garder la structure des répertoires
+!csv_out/.gitkeep
+.~lock.*

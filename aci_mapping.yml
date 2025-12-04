@@ -1,0 +1,1589 @@
+# Mapping Automatique Ansible -> ACI
+# Généré par generate_mapping.py (v2)
+aci_aaa_certificate_authority:
+  aci_class: pkiTP
+  attributes:
+    certificate_chain: certChain
+    description: descr
+    name: name
+    name_alias: nameAlias
+aci_aaa_custom_privilege:
+  aci_class: aaaRbacClassPriv
+  attributes:
+    description: descr
+    name: name
+    name_alias: nameAlias
+    r_priv: rPriv
+    w_priv: wPriv
+aci_aaa_domain:
+  aci_class: aaaDomain
+  attributes:
+    description: descr
+    name: name
+    name_alias: nameAlias
+    restricted_rbac_domain_state: restrictedRbacDomain
+aci_aaa_key_ring:
+  aci_class: pkiKeyRing
+  attributes:
+    certificate: cert
+    certificate_authority: tp
+    description: descr
+    key: key
+    modulus: modulus
+    name: name
+    name_alias: nameAlias
+aci_aaa_role:
+  aci_class: aaaRole
+  attributes:
+    description: descr
+    formatted_privileges: priv
+    name: name
+    name_alias: nameAlias
+aci_aaa_security_default_settings:
+  aci_class: aaaUserEp
+  attributes:
+    name_alias: nameAlias
+    password_strength_check: pwdStrengthCheck
+aci_aaa_user:
+  aci_class: aaaUser
+  attributes:
+    aaa_password: pwd
+    aaa_password_lifetime: pwdLifeTime
+    aaa_password_update_required: pwdUpdateRequired
+    aaa_user: name
+    clear_password_history: clearPwdHistory
+    description: descr
+    email: email
+    enabled: accountStatus
+    expiration: expiration
+    expires: expires
+    first_name: firstName
+    last_name: lastName
+    name_alias: nameAlias
+    phone: phone
+aci_aaa_user_certificate:
+  aci_class: aaaUserCert
+  attributes:
+    certificate: data
+    name: name
+    name_alias: nameAlias
+aci_aaa_user_domain:
+  aci_class: aaaUserDomain
+  attributes:
+    name: name
+    name_alias: nameAlias
+aci_aaa_user_role:
+  aci_class: aaaUserRole
+  attributes:
+    name: name
+    name_alias: nameAlias
+    privilege_type: privType
+aci_access_port_block_to_access_port:
+  aci_class: infraPortBlk
+  attributes:
+    from_card: fromCard
+    from_port: fromPort
+    port_blk: name
+    port_blk_description: descr
+    to_card: toCard
+    to_port: toPort
+aci_access_port_to_interface_policy_leaf_profile:
+  aci_class: infraHPortS
+  attributes:
+    access_port_selector: name
+    description: descr
+aci_access_span_filter_group_entry:
+  aci_class: spanFilterEntry
+  attributes:
+    destination_ip: dstAddr
+    first_dest_port: dstPortFrom
+    first_src_port: srcPortFrom
+    ip_protocol: ipProto
+    last_dest_port: dstPortTo
+    last_src_port: srcPortTo
+    name_alias: nameAlias
+    source_ip: srcAddr
+aci_access_port_to_int_policy_leaf:
+  aci_class: infraHPortS
+  attributes:
+    access_port_selector: name
+    description: descr
+aci_access_span_src_group_src:
+  aci_class: spanSrc
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    source: name
+aci_access_spine_interface_profile:
+  aci_class: infraSpAccPortP
+  attributes:
+    description: descr
+    interface_profile: name
+    name_alias: nameAlias
+aci_access_spine_interface_selector:
+  aci_class: infraSHPortS
+  attributes:
+    description: descr
+    selector_type: type
+    spine_interface_selector: name
+aci_access_spine_switch_profile:
+  aci_class: infraSpineP
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    switch_profile: name
+aci_access_spine_switch_selector:
+  aci_class: infraSpineS
+  attributes:
+    description: descr
+    selector_type: type
+    spine_switch_selector: name
+aci_access_sub_port_block_to_access_port:
+  aci_class: infraSubPortBlk
+  attributes:
+    from_card: fromCard
+    from_port: fromPort
+    from_sub_port: fromSubPort
+    leaf_port_blk: name
+    leaf_port_blk_description: descr
+    to_card: toCard
+    to_port: toPort
+    to_sub_port: toSubPort
+aci_action_rule_additional_communities:
+  aci_class: rtctrlSetAddComm
+  attributes:
+    community: community
+    criteria: setCriteria
+    description: descr
+    name_alias: nameAlias
+aci_action_rule_set_as_path:
+  aci_class: rtctrlSetASPath
+  attributes:
+    criteria: criteria
+    description: descr
+    last_as: lastnum
+    name_alias: nameAlias
+aci_action_rule_set_as_path_asn:
+  aci_class: rtctrlSetASPathASN
+  attributes:
+    asn: asn
+    description: descr
+    name_alias: nameAlias
+    order: order
+aci_aep:
+  aci_class: infraAttEntityP
+  attributes:
+    aep: name
+    description: descr
+    name_alias: nameAlias
+aci_aep_to_epg:
+  aci_class: infraRsFuncToEpg
+  attributes:
+    encap: encap
+    mode: mode
+aci_ap:
+  aci_class: fvAp
+  attributes:
+    ap: name
+    description: descr
+    name_alias: nameAlias
+aci_bd:
+  aci_class: fvBD
+  attributes:
+    allow_intersite_bum_traffic: intersiteBumTrafficAllow
+    allow_intersite_l2_stretch: intersiteL2Stretch
+    allow_ipv6_multicast: ipv6McastAllow
+    arp_flooding: arpFlood
+    bd: name
+    bd_type: type
+    description: descr
+    enable_multicast: mcastAllow
+    enable_rogue_except_mac: enableRogueExceptMac
+    enable_routing: unicastRoute
+    endpoint_clear: epClear
+    endpoint_move_detect: epMoveDetectMode
+    host_based_routing: hostBasedRouting
+    ip_learning: ipLearning
+    l2_unknown_unicast: unkMacUcastAct
+    l3_unknown_multicast: unkMcastAct
+    limit_ip_learn: limitIpLearnToSubnets
+    link_local_address: llAddr
+    mac_address: mac
+    multi_dest: multiDstPktAct
+    multicast_arp_drop: mcastARPDrop
+    name_alias: nameAlias
+    optimize_wan_bandwidth: OptimizeWanBandwidth
+    vmac: vmac
+aci_bd_dhcp_label:
+  aci_class: dhcpLbl
+  attributes:
+    description: descr
+    dhcp_label: name
+    scope: owner
+aci_bd_rogue_exception_mac:
+  aci_class: fvRogueExceptionMac
+  attributes:
+    description: descr
+    mac: mac
+aci_bd_subnet:
+  aci_class: fvSubnet
+  attributes:
+    description: descr
+    enable_vip: virtual
+    gateway: ip
+    name_alias: nameAlias
+    preferred: preferred
+    scope: scope
+    subnet_control: ctrl
+    subnet_name: name
+aci_bfd_multihop_node_policy:
+  aci_class: bfdMhNodePol
+  attributes:
+    admin_state: adminSt
+    description: descr
+    name: name
+aci_bgp_address_family_context_policy:
+  aci_class: bgpCtxAfPol
+  attributes:
+    address_family_context_policy: name
+    description: descr
+    ebgp_distance: eDist
+    ebgp_max_ecmp: maxEcmp
+    host_route_leak: ctrl
+    ibgp_distance: iDist
+    ibgp_max_ecmp: maxEcmpIbgp
+    local_distance: localDist
+    local_max_ecmp: maxLocalEcmp
+    name_alias: nameAlias
+aci_bgp_best_path_policy:
+  aci_class: bgpBestPathCtrlPol
+  attributes:
+    best_path_control: ctrl
+    bgp_best_path_policy: name
+    description: descr
+    name_alias: nameAlias
+aci_bgp_peer_prefix_policy:
+  aci_class: bgpPeerPfxPol
+  attributes:
+    action: action
+    description: descr
+    maximum_number_prefix: maxPfx
+    name_alias: nameAlias
+    peer_prefix_policy: name
+    restart_time: restartTime
+    threshold: thresh
+aci_bgp_route_summarization_policy:
+  aci_class: bgpRtSummPol
+  attributes:
+    control_state: ctrl
+    description: descr
+    name_alias: nameAlias
+    route_summarization_policy: name
+aci_bgp_rr_asn:
+  aci_class: bgpAsP
+  attributes:
+    asn: asn
+aci_bgp_rr_node:
+  aci_class: bgpRRNodePEp
+  attributes:
+    description: descr
+    node_id: id
+    pod_id: podId
+aci_bgp_timers_policy:
+  aci_class: bgpCtxPol
+  attributes:
+    bgp_timers_policy: name
+    description: descr
+    graceful_restart_controls: grCtrl
+    hold_interval: holdIntvl
+    keepalive_interval: kaIntvl
+    max_as_limit: maxAsLimit
+    name_alias: nameAlias
+    stale_interval: staleIntvl
+aci_cloud_ap:
+  aci_class: cloudApp
+  attributes:
+    description: descr
+    name: name
+aci_cloud_cidr:
+  aci_class: cloudCidr
+  attributes:
+    address: addr
+    description: descr
+    name_alias: nameAlias
+aci_cloud_ctx_profile:
+  aci_class: cloudCtxProfile
+  attributes:
+    description: descr
+    name: name
+    name_alias: name_alias
+aci_cloud_subnet:
+  aci_class: cloudSubnet
+  attributes:
+    address: ip
+    description: descr
+    name: name
+    name_alias: nameAlias
+    usage: usage
+aci_config_export_policy:
+  aci_class: configExportP
+  attributes:
+    description: descr
+    format: format
+    name: name
+    snapshot: snapshot
+    start_now: adminSt
+    target_dn: targetDn
+aci_config_rollback:
+  aci_class: configImportP
+  attributes:
+    description: descr
+    fail_on_decrypt: failOnDecryptErrors
+    filename: fileName
+    import_mode: importMode
+    import_policy: name
+    import_type: importType
+aci_config_snapshot:
+  aci_class: configExportP
+  attributes:
+    description: descr
+    export_policy: name
+    file_format: format
+    include_secure: includeSecureFields
+    max_count: maxSnapshotCount
+    snapshot: name
+aci_l3out_bgp_peer_floating:
+  aci_class: bgpPeerP
+  attributes:
+    addr: addr
+    description: descr
+    l3out: module.params.get("l3out")
+    logical_node_profile: module.params.get("logical_node_profile")
+    logical_interface_profile: module.params.get("logical_interface_profile")
+    tenant: module.params.get("tenant")
+aci_contract:
+  aci_class: vzBrCP
+  attributes:
+    contract: name
+    description: descr
+    name_alias: nameAlias
+    scope: scope
+    target_dscp: targetDscp
+aci_contract_subject:
+  aci_class: vzSubj
+  attributes:
+    contract: module.params.get("contract")
+    description: descr
+    reverse_filter_ports: revFltPorts
+    subject: name
+    tenant: module.params.get("tenant")
+aci_contract_subject_to_filter:
+  aci_class: vzRsSubjFiltAtt
+  attributes:
+    contract: module.params.get("contract")
+    filter: tnVzFilterName
+    subject: module.params.get("subject")
+    tenant: module.params.get("tenant")
+aci_epg_to_contract:
+  aci_class: fvRsCons
+  attributes:
+    ap: module.params.get("ap")
+    contract: tnVzBrCPName
+    contract_type: consumer # Par défaut, ou provider (fvRsProv) - nécessite logique custom
+    epg: module.params.get("epg")
+    tenant: module.params.get("tenant")
+aci_interface_config:
+  aci_class: infraPortConfig
+  attributes:
+    admin_state: shutdown # mapping inverse géré par script
+    breakout: brkoutMap
+    description: descr
+    interface: port # reconstruit par script
+    node: node
+    pc_member: pcMember
+    policy_group: assocGrp # extrait par script
+    port_type: module.params.get("port_type") # static access
+    role: role
+aci_domain:
+  aci_class: physDomP # Ou l3extDomP, vmmDomP... nécessite logique custom
+  attributes:
+    domain: name
+    domain_type: module.params.get("domain_type")
+    dsc_node: module.params.get("dsc_node")
+aci_interface_policy_leaf_policy_gr:
+  aci_class: infraAccPortGrp
+  attributes:
+    aep: module.params.get("aep")
+    description: descr
+    policy_group: name
+aci_switch_policy_vpc_protection_gr:
+  aci_class: fabricExplicitGEp
+  attributes:
+    protection_group: name
+    protection_group_id: id
+    switch_1_id: module.params.get("switch_1_id")
+    switch_2_id: module.params.get("switch_2_id")
+    description: descr
+    dscp: targetDscp
+    name_alias: nameAlias
+    priority: prio
+aci_dhcp_option:
+  aci_class: dhcpOption
+  attributes:
+    data: data
+    dhcp_option: name
+    id: id
+aci_dhcp_option_policy:
+  aci_class: dhcpOptionPol
+  attributes:
+    description: descr
+    dhcp_option_policy: name
+aci_encap_pool:
+  aci_class: fvnsVsanInstP
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    pool: name
+    pool_allocation_mode: allocMode
+aci_endpoint_tag_ip:
+  aci_class: fvEpIpTag
+  attributes:
+    annotation: annotation
+    ip: ip
+    name_alias: nameAlias
+    vrf: ctxName
+aci_endpoint_tag_mac:
+  aci_class: fvEpMacTag
+  attributes:
+    annotation: annotation
+    bd: bdName
+    mac: mac
+    name_alias: nameAlias
+aci_epg:
+  aci_class: fvAEPg
+  attributes:
+    description: descr
+    epg: name
+    fwd_control: fwdCtrl
+    intra_epg_isolation: pcEnfPref
+    name_alias: nameAlias
+    preferred_group: prefGrMemb
+    priority: prio
+    useg: isAttrBasedEPg
+aci_epg_monitoring_policy:
+  aci_class: monEPGPol
+  attributes:
+    description: descr
+    monitoring_policy: name
+    name_alias: nameAlias
+aci_epg_subnet:
+  aci_class: fvSubnet
+  attributes:
+    description: descr
+    enable_vip: virtual
+    gateway: ip
+    ip_data_plane_learning: ipDPLearning
+    name_alias: nameAlias
+    preferred: preferred
+    scope: scope
+    subnet_control: ctrl
+    subnet_name: name
+aci_epg_to_contract_interface:
+  aci_class: fvRsConsIf
+  attributes:
+    contract_interface: tnVzCPIfName
+    priority: prio
+aci_epg_to_domain:
+  aci_class: fvRsDomAtt
+  attributes:
+    allow_useg: classPref
+    custom_epg_name: customEpgName
+    delimiter: delimiter
+    deploy_immediacy: instrImedcy
+    encap: encap
+    encap_mode: encapMode
+    epg_cos: epgCos
+    epg_cos_pref: epgCosPref
+    ipam_dhcp_override: ipamDhcpOverride
+    ipam_enabled: ipamEnabled
+    ipam_gateway: ipamGateway
+    lag_policy_name: lagPolicyName
+    netflow: netflowPref
+    netflow_direction: netflowDir
+    number_of_ports: numPorts
+    port_allocation: portAllocation
+    port_binding: bindingType
+    primary_encap: primaryEncap
+    primary_encap_inner: primaryEncapInner
+    resolution_immediacy: resImedcy
+    secondary_encap_inner: secondaryEncapInner
+    switching_mode: switchingMode
+    untagged_vlan: untagged
+aci_esg:
+  aci_class: fvESg
+  attributes:
+    description: descr
+    esg: name
+    intra_esg_isolation: pcEnfPref
+    name_alias: nameAlias
+    preferred_group_member: prefGrMemb
+    shutdown: shutdown
+aci_esg_epg_selector:
+  aci_class: fvEPgSelector
+  attributes:
+    description: descr
+    matchEpgDn: matchEpgDn
+aci_esg_ip_subnet_selector:
+  aci_class: fvEPSelector
+  attributes:
+    description: descr
+    match_expression: matchExpression
+aci_esg_tag_selector:
+  aci_class: fvTagSelector
+  attributes:
+    description: descr
+    match_value: matchValue
+    name: matchKey
+    operator: valueOperator
+aci_fabric_external_connection_profile:
+  aci_class: fvFabricExtConnP
+  attributes:
+    community: rt
+    description: descr
+    fabric_id: id
+    name: name
+    site_id: siteId
+aci_fabric_external_routing_profile:
+  aci_class: l3extFabricExtRoutingP
+  attributes:
+    description: descr
+    name: name
+aci_fabric_interface_policy_group:
+  aci_class: fabricFuncP
+  attributes:
+    description: descr
+    name: name
+    name_alias: nameAlias
+aci_fabric_management_access:
+  aci_class: commPol
+  attributes:
+    description: descr
+    name: name
+    name_alias: nameAlias
+aci_fabric_management_access_https_cipher:
+  aci_class: commCipher
+  attributes:
+    cipher_state: state
+    id_value: id
+    name_alias: nameAlias
+aci_fabric_node:
+  aci_class: fabricNodeIdentP
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    node_id: nodeId
+    node_type: nodeType
+    pod_id: podId
+    remote_leaf_pool_id: extPoolId
+    role: role
+    serial: serial
+    switch: name
+aci_fabric_node_control:
+  aci_class: fabricNodeControl
+  attributes:
+    description: descr
+    enable_dom: control
+    feature_selection: featureSel
+    name: name
+aci_fabric_pod:
+  aci_class: fabricSetupP
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    pod_id: podId
+    pod_type: podType
+    tep_pool: tepPool
+aci_fabric_pod_connectivity_profile:
+  aci_class: fvPodConnP
+  attributes:
+    description: descr
+    pod_id: id
+    virtual_pod_id: assocIntersitePodId
+aci_fabric_pod_external_tep:
+  aci_class: fabricExtRoutablePodSubnet
+  attributes:
+    descr: descr
+    external_tep_pool: pool
+    name_alias: nameAlias
+    reserve_address_count: reserveAddressCount
+    status: state
+aci_fabric_pod_profile:
+  aci_class: fabricPodP
+  attributes:
+    description: descr
+    name: name
+    name_alias: nameAlias
+aci_fabric_pod_remote_pool:
+  aci_class: fabricExtSetupP
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    remote_id: extPoolId
+    remote_pool: tepPool
+aci_fabric_pod_selector:
+  aci_class: fabricPodS
+  attributes:
+    description: descr
+    name: name
+    name_alias: nameAlias
+    selector_type: type
+aci_fabric_scheduler:
+  aci_class: trigSchedP
+  attributes:
+    description: descr
+    name: name
+    name_alias: nameAlias
+aci_fabric_span_src_group_src:
+  aci_class: spanSrc
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    source: name
+aci_fabric_wide_settings:
+  aci_class: infraSetPol
+  attributes:
+    disable_remote_ep_learning: unicastXrEpLearnDisable
+    enforce_domain_validation: domainValidation
+    enforce_epg_vlan_validation: validateOverlappingVlans
+    enforce_subnet_check: enforceSubnetCheck
+    leaf_opflex_client_auth: leafOpflexpAuthenticateClients
+    leaf_ssl_opflex: leafOpflexpUseSsl
+    reallocate_gipo: reallocateGipo
+    restrict_infra_vlan_traffic: restrictInfraVLANTraffic
+    spine_opflex_client_auth: opflexpAuthenticateClients
+    spine_ssl_opflex: opflexpUseSsl
+aci_file_remote_path:
+  aci_class: fileRemotePath
+  attributes:
+    auth: authType
+    description: descr
+    name: name
+    passphrase: identityPrivateKeyPassphrase
+    remote_host: host
+    remote_key: identityPrivateKeyContents
+    remote_password: userPasswd
+    remote_path: remotePath
+    remote_port: remotePort
+    remote_protocol: protocol
+    remote_user: userName
+aci_filter:
+  aci_class: vzFilter
+  attributes:
+    description: descr
+    filter_name: name
+    name_alias: nameAlias
+aci_filter_entry:
+  aci_class: vzEntry
+  attributes:
+    arp_flag: arpOpc
+    description: descr
+    dst_port_end: dToPort
+    dst_port_start: dFromPort
+    entry: name
+    ether_type: etherT
+    icmp6_msg_type: icmpv6T
+    icmp_msg_type: icmpv4T
+    ip_protocol: prot
+    match_only_fragments: applyToFrag
+    name_alias: nameAlias
+    source_port_end: sToPort
+    source_port_start: sFromPort
+    stateful: stateful
+aci_firmware_group:
+  aci_class: firmwareFwGrp
+  attributes:
+    description: descr
+    group: name
+    name_alias: nameAlias
+    type_group: type
+aci_firmware_group_node:
+  aci_class: fabricNodeBlk
+  attributes:
+    name_alias: nameAlias
+    node: to_
+aci_firmware_policy:
+  aci_class: firmwareFwP
+  attributes:
+    description: descr
+    effective_on_reboot: effectiveOnReboot
+    ignore_compat: ignoreCompat
+    name: name
+    name_alias: nameAlias
+    sr_upgrade: srUpgrade
+    sr_version: srVersion
+    version: version
+    version_check_override: versionCheckOverride
+aci_firmware_source:
+  aci_class: firmwareOSource
+  attributes:
+    name_alias: nameAlias
+    polling_interval: pollingInterval
+    source: name
+    url: url
+    url_password: password
+    url_protocol: proto
+    url_username: user
+aci_igmp_interface_policy:
+  aci_class: igmpIfPol
+  attributes:
+    description: descr
+    group_timeout: grpTimeout
+    if_ctrl: ifCtrl
+    igmp_version: ver
+    last_member_count: lastMbrCnt
+    last_member_response: lastMbrRespTime
+    name: name
+    querier_timeout: querierTimeout
+    query_interval: queryIntvl
+    query_response_interval: rspIntvl
+    robustness_variable: robustFac
+    startup_query_count: startQueryCnt
+    startup_query_interval: startQueryIntvl
+aci_interface_description:
+  aci_class: infraInfra
+  attributes:
+    description: descr
+aci_interface_policy_bfd:
+  aci_class: bfdIfPol
+  attributes:
+    admin_state: adminSt
+    description: descr
+    name: name
+aci_interface_policy_bfd_multihop:
+  aci_class: bfdMhIfPol
+  attributes:
+    admin_state: adminSt
+    description: descr
+    name: name
+aci_interface_policy_cdp:
+  aci_class: cdpIfPol
+  attributes:
+    admin_state: adminSt
+    cdp_policy: name
+    description: descr
+    name_alias: nameAlias
+aci_interface_policy_eigrp:
+  aci_class: eigrpIfPol
+  attributes:
+    bandwidth: bw
+    control_state: ctrl
+    delay: delay
+    delay_unit: delayUnit
+    description: descr
+    eigrp: name
+    hello_interval: helloIntvl
+    hold_interval: holdIntvl
+    name_alias: nameAlias
+aci_interface_policy_fc:
+  aci_class: fcIfPol
+  attributes:
+    auto_max_speed: automaxspeed
+    buffer_credits: rxBBCredit
+    description: descr
+    fc_policy: name
+    fill_pattern: fillPattern
+    name_alias: nameAlias
+    port_mode: portMode
+    speed: speed
+    trunk_mode: trunkMode
+aci_interface_policy_hsrp:
+  aci_class: hsrpIfPol
+  attributes:
+    controls: ctrl
+    delay: delay
+    description: descr
+    hsrp: name
+    reload_delay: reloadDelay
+aci_interface_policy_l2:
+  aci_class: l2IfPol
+  attributes:
+    description: descr
+    l2_policy: name
+    name_alias: nameAlias
+    qinq: qinq
+    vepa: vepa
+    vlan_scope: vlanScope
+aci_interface_policy_leaf_breakout_port_group:
+  aci_class: infraBrkoutPortGrp
+  attributes:
+    breakout_map: brkoutMap
+    breakout_port_group: name
+    description: descr
+aci_interface_policy_leaf_profile:
+  aci_class: infraAccPortP
+  attributes:
+    description: descr
+    interface_profile: name
+    name_alias: nameAlias
+aci_int_sel_to_switch_policy_leaf:
+  aci_class: infraRsAccPortP
+  attributes:
+    tDn: tDn
+aci_interface_policy_leaf_profile_fex_policy_group:
+  aci_class: infraFexBndlGrp
+  attributes:
+    name: name
+aci_interface_policy_link_level:
+  aci_class: fabricHIfPol
+  attributes:
+    auto_negotiation: autoNeg
+    description: descr
+    forwarding_error_correction: fecMode
+    link_debounce_interval: linkDebounce
+    link_level_policy: name
+    speed: speed
+aci_interface_policy_lldp:
+  aci_class: lldpIfPol
+  attributes:
+    description: descr
+    lldp_policy: name
+    name_alias: nameAlias
+    receive_state: adminRxSt
+    transmit_state: adminTxSt
+aci_interface_policy_mcp:
+  aci_class: mcpIfPol
+  attributes:
+    admin_state: adminSt
+    description: descr
+    grace_period: gracePeriod
+    grace_period_millisec: gracePeriodMsec
+    init_delay_time: strictInitDelayTime
+    mcp: name
+    mcp_mode: mcpMode
+    name_alias: nameAlias
+    tx_frequence: strictTxFreq
+    tx_frequence_millisec: strictTxFreqMsec
+aci_interface_policy_ospf:
+  aci_class: ospfIfPol
+  attributes:
+    controls: ctrl
+    cost: cost
+    dead_interval: deadIntvl
+    description: descr
+    hello_interval: helloIntvl
+    name_alias: nameAlias
+    network_type: nwT
+    ospf: name
+    prefix_suppression: pfxSuppress
+    priority: prio
+    retransmit_interval: rexmitIntvl
+    transmit_delay: xmitDelay
+aci_interface_policy_pim:
+  aci_class: pimIfPol
+  attributes:
+    authentication_key: authKey
+    authentication_type: authT
+    control_state: ctrl
+    description: descr
+    designated_router_delay: drDelay
+    designated_router_priority: drPrio
+    hello_interval: helloItvl
+    join_prune_interval: jpInterval
+    name_alias: nameAlias
+    pim: name
+aci_interface_policy_port_channel:
+  aci_class: lacpLagPol
+  attributes:
+    ctrl: ctrl
+    description: descr
+    max_links: maxLinks
+    min_links: minLinks
+    mode: mode
+    name_alias: nameAlias
+    port_channel: name
+aci_interface_policy_port_channel_member:
+  aci_class: lacpIfPol
+  attributes:
+    description: descr
+    name: name
+    name_alias: nameAlias
+    priority: prio
+    transmit_rate: txRate
+aci_interface_policy_port_security:
+  aci_class: l2PortSecurityPol
+  attributes:
+    description: descr
+    max_end_points: maximum
+    name_alias: nameAlias
+    port_security: name
+    port_security_timeout: timeout
+aci_interface_policy_spanning_tree:
+  aci_class: stpIfPol
+  attributes:
+    ctrl: ctrl
+    description: descr
+    name_alias: nameAlias
+    stp_policy: name
+aci_interface_policy_spine_policy_group:
+  aci_class: infraSpAccPortGrp
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    policy_group: name
+aci_interface_policy_storm_control:
+  aci_class: stormctrlIfPol
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    storm_control_action: stormCtrlAction
+    storm_control_policy: name
+    storm_control_soak_action: stormCtrlSoakInstCount
+    storm_control_types: isUcMcBcStormPktCfgValid
+aci_ip_sla_monitoring_policy:
+  aci_class: fvIPSLAMonitoringPol
+  attributes:
+    description: descr
+    frequency: slaFrequency
+    http_uri: httpUri
+    http_version: httpVersion
+    multiplier: slaDetectMultiplier
+    name: name
+    operation_timeout: timeout
+    request_data_size: reqDataSize
+    sla_port: slaPort
+    sla_type: slaType
+    threshold: threshold
+    traffic_class: ipv6TrfClass
+    type_of_service: ipv4Tos
+aci_key_policy:
+  aci_class: fvKeyPol
+  attributes:
+    description: descr
+    end_time: endTime
+    id: id
+    start_time: startTime
+aci_keychain_policy:
+  aci_class: fvKeyChainPol
+  attributes:
+    description: descr
+    keychain_policy: name
+aci_l2out_extepg_to_contract:
+  aci_class: l2extInstP
+  attributes:
+    contract: tnVzBrCPName
+    priority: prio
+    provider_match: matchT
+aci_l3out:
+  aci_class: l3extOut
+  attributes:
+    description: descr
+    dscp: targetDscp
+    enforce_ctrl: enforceRtctrl
+    l3out: name
+    mpls: mplsEnabled
+    name_alias: nameAlias
+aci_l3out_bfd_interface_profile:
+  aci_class: bfdIfP
+  attributes:
+    authentication_type: type
+    description: descr
+    key: key
+    name: name
+    name_alias: nameAlias
+aci_l3out_bfd_multihop_interface_profile:
+  aci_class: bfdMhIfP
+  attributes:
+    authentication_type: type
+    description: descr
+    key: key
+    name: name
+    name_alias: nameAlias
+aci_l3out_bgp_peer:
+  aci_class: l3extLNodeP
+  attributes:
+    addrTCtrl: addrTCtrl
+    admin_state: adminSt
+    allow_self_as_count: allowedSelfAsCnt
+    ctrl: ctrl
+    ctrl_ext: ctrlExt
+    description: descr
+    peerCtrl: peerCtrl
+    peer_ip: addr
+    privateASctrl: privateASctrl
+    ttl: ttl
+    weight: weight
+aci_l3out_bgp_protocol_profile:
+  aci_class: bgpProtP
+  attributes:
+    name_alias: nameAlias
+aci_l3out_dhcp_relay_label:
+  aci_class: dhcpLbl
+  attributes:
+    description: descr
+    dhcp_relay_label: name
+    scope: owner
+aci_l3out_eigrp_interface_profile:
+  aci_class: eigrpIfP
+  attributes:
+    description: descr
+aci_l3out_extepg:
+  aci_class: l3extInstP
+  attributes:
+    contract_exception_tag: exceptionTag
+    description: descr
+    dscp: targetDscp
+    extepg: name
+    name_alias: nameAlias
+    preferred_group: prefGrMemb
+    qos_class: prio
+aci_l3out_floating_svi:
+  aci_class: l3extVirtualLIfP
+  attributes:
+    address: addr
+    auto_state: autostate
+    encap: encap
+    encap_scope: encapScope
+    ipv6_dad: ipv6Dad
+    link_local_address: llAddr
+    mac_address: mac
+    mode: mode
+    mtu: mtu
+aci_l3out_floating_svi_path:
+  aci_class: l3extRsDynPathAtt
+  attributes:
+    access_encap: encap
+    floating_ip: floatingAddr
+    forged_transmit: forgedTransmit
+    mac_change: macChange
+    promiscuous_mode: promMode
+aci_l3out_interface:
+  aci_class: l3extRsPathL3OutAtt
+  attributes:
+    address: addr
+    auto_state: autostate
+    description: descr
+    encap: encap
+    interface_type: ifInstT
+    ipv6_dad: ipv6Dad
+    mac: mac
+    mode: mode
+    mtu: mtu
+    path_dn: tDn
+aci_l3out_logical_interface_profile:
+  aci_class: l3extLIfP
+  attributes:
+    description: descr
+    interface_profile: name
+    qos_priority: prio
+aci_l3out_logical_interface_vpc_member:
+  aci_class: l3extMember
+  attributes:
+    address: addr
+    description: descr
+    ipv6_dad: ipv6Dad
+    name_alias: nameAlias
+    side: side
+aci_l3out_logical_node_profile:
+  aci_class: l3extLNodeP
+  attributes:
+    description: descr
+    dscp: targetDscp
+    name_alias: nameAlias
+    node_profile: name
+aci_l3out_route_tag_policy:
+  aci_class: l3extRouteTagPol
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    rtp: name
+    tag: tag
+aci_l3out_static_routes:
+  aci_class: ipRouteP
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    preference: pref
+    prefix: ip
+aci_l3out_to_sr_mpls_infra_l3out:
+  aci_class: l3extConsLbl
+  attributes:
+    description: descr
+    infra_l3out: name
+    name_alias: nameAlias
+aci_l4l7_concrete_device:
+  aci_class: vnsCDev
+  attributes:
+    name: name
+    vcenter_name: vcenterName
+    vm_name: vmName
+aci_l4l7_concrete_interface:
+  aci_class: vnsCIf
+  attributes:
+    name: name
+    vnic_name: vnicName
+aci_l4l7_device:
+  aci_class: vnsLDevVip
+  attributes:
+    active_active_mode: activeActive
+    function_type: funcType
+    managed: managed
+    name: name
+    promiscuous_mode: promMode
+    trunking: trunking
+aci_l4l7_device_selection_interface_context:
+  aci_class: vnsLIfCtx
+  attributes:
+    acl: acl
+    context: connNameOrLbl
+    description: descr
+    l3_destination: l3Dest
+    permit_handoff: permitHandoff
+    permit_log: permitLog
+    rule_type: ruleType
+aci_l4l7_device_selection_policy:
+  aci_class: vnsLDevCtx
+  attributes:
+    context: context
+    contract: ctrctNameOrLbl
+    description: descr
+    graph: graphNameOrLbl
+    node: nodeNameOrLbl
+aci_l4l7_policy_based_redirect:
+  aci_class: vnsSvcRedirectPol
+  attributes:
+    anycast_enabled: AnycastEnabled
+    description: descr
+    destination_type: destType
+    hash_algorithm: hashingAlgorithm
+    max_threshold: maxThresholdPercent
+    min_threshold: minThresholdPercent
+    pod_aware: programLocalPodOnly
+    policy_name: name
+    resilient_hash: resilientHashEnabled
+    rewrite_source_mac: srcMacRewriteEnabled
+    threshold_down_action: thresholdDownAction
+    threshold_enable: thresholdEnable
+aci_l4l7_policy_based_redirect_destination:
+  aci_class: vnsSvcRedirectPol
+  attributes:
+    additional_ip: ip2
+    description: descr
+    destination_name: destName
+    ip: ip
+    mac: mac
+    pod_id: podId
+    weight: weight
+aci_l4l7_redirect_health_group:
+  aci_class: vnsRedirectHealthGroup
+  attributes:
+    description: descr
+    health_group: name
+aci_l4l7_service_graph_template:
+  aci_class: vnsAbsGraph
+  attributes:
+    description: descr
+    filter_between_nodes: filterBetweenNodes
+    service_graph: name
+    service_rule_type: svcRuleType
+    type: type
+    ui_template_type: uiTemplateType
+aci_l4l7_service_graph_template_connection:
+  aci_class: vnsAbsConnection
+  attributes:
+    adjacency_type: adjType
+    connection_name: name
+    connection_type: connType
+    connector_direction: connDir
+    description: descr
+    direct_connect: directConnect
+    unicast_route: unicastRoute
+aci_l4l7_service_graph_template_node:
+  aci_class: vnsAbsNode
+  attributes:
+    description: descr
+    function_type: funcType
+    functional_template_type: funcTemplateType
+    is_copy: isCopy
+    managed: managed
+    node: name
+    routing_mode: routingMode
+    share_encap: shareEncap
+aci_maintenance_group:
+  aci_class: maintMaintGrp
+  attributes:
+    description: descr
+    firmware_nodes_type: fwtype
+    group: name
+    name_alias: nameAlias
+    type_group: type
+aci_maintenance_group_node:
+  aci_class: fabricNodeBlk
+  attributes:
+    name_alias: nameAlias
+    node: to_
+aci_maintenance_policy:
+  aci_class: maintMaintP
+  attributes:
+    admin_state: adminSt
+    description: descr
+    download_state: downloadSt
+    graceful: graceful
+    ignore_compat: ignoreCompat
+    name: name
+    name_alias: nameAlias
+    notify_condition: notifCond
+    run_mode: runMode
+    smu_operation: smuOperation
+    smu_operation_flags: smuOperationFlags
+    sr_upgrade: srUpgrade
+    sr_version: srVersion
+    version: version
+    version_check_override: versionCheckOverride
+aci_match_as_path_regex_term:
+  aci_class: rtctrlMatchAsPathRegexTerm
+  attributes:
+    description: descr
+    match_as_path_regex_term: name
+    name_alias: nameAlias
+    regex: regex
+aci_match_community_factor:
+  aci_class: rtctrlMatchCommFactor
+  attributes:
+    community: community
+    description: descr
+    name_alias: nameAlias
+    scope: scope
+aci_match_community_regex_term:
+  aci_class: rtctrlMatchCommRegexTerm
+  attributes:
+    community_type: commType
+    description: descr
+    match_community_regex_term: name
+    name_alias: nameAlias
+    regex: regex
+aci_match_community_term:
+  aci_class: rtctrlMatchCommTerm
+  attributes:
+    description: descr
+    match_community_term: name
+    name_alias: nameAlias
+aci_match_route_destination:
+  aci_class: rtctrlMatchRtDest
+  attributes:
+    aggregate: aggregate
+    description: descr
+    from_prefix_length: fromPfxLen
+    ip: ip
+    name_alias: nameAlias
+    to_prefix_length: toPfxLen
+aci_match_rule:
+  aci_class: rtctrlSubjP
+  attributes:
+    description: descr
+    match_rule: name
+    name_alias: nameAlias
+aci_netflow_exporter_policy:
+  aci_class: netflowExporterPol
+  attributes:
+    custom_source_address: srcAddr
+    description: descr
+    destination_address: dstAddr
+    destination_port: dstPort
+    dscp: dscp
+    netflow_exporter_policy: name
+    source_ip_type: sourceIpType
+aci_netflow_monitor_policy:
+  aci_class: netflowMonitorPol
+  attributes:
+    description: descr
+    netflow_monitor_policy: name
+aci_netflow_record_policy:
+  aci_class: netflowRecordPol
+  attributes:
+    collect: collect
+    description: descr
+    match: match
+    netflow_record_policy: name
+aci_node_block:
+  aci_class: infraNodeBlk
+  attributes:
+    description: descr
+    from_port: from_
+    node_block: name
+    to_port: to_
+aci_node_mgmt_epg:
+  aci_class: mgmtMgmtP
+  attributes:
+    encap: encap
+    epg: name
+aci_ntp_policy:
+  aci_class: datetimePol
+  attributes:
+    admin_state: adminSt
+    auth_state: authSt
+    description: descr
+    master_mode: masterMode
+    name: name
+    server_state: serverState
+    stratum: StratumValue
+aci_ntp_server:
+  aci_class: datetimeNtpProv
+  attributes:
+    description: descr
+    max_poll: maxPoll
+    min_poll: minPoll
+    ntp_server: name
+    preferred: preferred
+aci_oob_contract:
+  aci_class: vzOOBBrCP
+  attributes:
+    contract: name
+    description: descr
+    name_alias: nameAlias
+    priority: prio
+aci_pim_route_map_entry:
+  aci_class: pimRouteMapEntry
+  attributes:
+    action: action
+    description: descr
+    group_ip: grp
+    order: order
+    pim_route_map_policy: name
+    rp_ip: rp
+    source_ip: src
+aci_pim_route_map_policy:
+  aci_class: pimRouteMapPol
+  attributes:
+    description: descr
+    pim_route_map_policy: name
+aci_qos_custom_policy:
+  aci_class: qosCustomPol
+  attributes:
+    description: descr
+    qos_custom_policy: name
+aci_route_control_context:
+  aci_class: rtctrlCtxP
+  attributes:
+    action: action
+    description: descr
+    name_alias: nameAlias
+    order: order
+    route_control_context: name
+aci_route_control_profile:
+  aci_class: rtctrlProfile
+  attributes:
+    auto_continue: autoContinue
+    description: descr
+    name_alias: nameAlias
+    policy_type: type
+    route_control_profile: name
+aci_static_binding_to_epg:
+  aci_class: fvRsPathAtt
+  attributes:
+    deploy_immediacy: instrImedcy
+    description: descr
+    encap_id: encap
+    interface_mode: mode
+    primary_encap_id: primaryEncap
+    static_path: tDn
+aci_subject_label:
+  aci_class: vzSubj
+  attributes:
+    complement: isComplement
+    description: descr
+    name_alias: nameAlias
+    subject_label: name
+aci_switch_leaf_selector:
+  aci_class: infraLeafS
+  attributes:
+    description: descr
+    leaf: name
+    name_alias: nameAlias
+aci_switch_policy_leaf_profile:
+  aci_class: infraNodeP
+  attributes:
+    description: descr
+    leaf_profile: name
+    name_alias: nameAlias
+aci_switch_policy_vpc_protection_group:
+  aci_class: fabricExplicitGEp
+  attributes:
+    name_alias: nameAlias
+    protection_group: name
+    protection_group_id: id
+aci_syslog_group:
+  aci_class: syslogGroup
+  attributes:
+    description: descr
+    format: format
+    include_ms: includeMilliSeconds
+    name: name
+aci_syslog_remote_dest:
+  aci_class: syslogRemoteDest
+  attributes:
+    admin_state: adminState
+    description: descr
+    destination: host
+    facility: forwardingFacility
+    format: format
+    name: name
+    severity: severity
+    syslog_port: port
+aci_system_banner:
+  aci_class: aaaPreLoginBanner
+  attributes:
+    application_banner: bannerMessage
+    controller_banner: message
+    description: descr
+    gui_alias: guiTextMessage
+    gui_banner: guiMessage
+    is_gui_message_text: isGuiMessageText
+    name_alias: nameAlias
+    severity: bannerMessageSeverity
+    switch_banner: switchMessage
+aci_taboo_contract:
+  aci_class: vzTaboo
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    scope: scope
+    taboo_contract: name
+aci_l3out_extsubnet:
+  aci_class: l3extSubnet
+  attributes:
+    aggregate: aggregate
+    description: descr
+    network: ip
+    scope: scope
+    subnet_name: name
+    tenant: module.params.get("tenant") # Sera géré par la logique tenant
+aci_l3out_logical_node:
+  aci_class: l3extRsNodeL3OutAtt
+  attributes:
+    description: descr
+    l3out: module.params.get("l3out")
+    node_id: name
+    node_profile: module.params.get("node_profile")
+    pod_id: module.params.get("pod_id")
+    router_id: module.params.get("router_id")
+    tenant: module.params.get("tenant")
+aci_vlan_pool_encap_block:
+  aci_class: fvnsEncapBlk
+  attributes:
+    allocation_mode: allocMode
+    block_end: to
+    block_name: name
+    block_start: from
+    description: descr
+    pool: module.params.get("pool")
+    pool_allocation_mode: module.params.get("pool_allocation_mode")
+aci_domain_to_vlan_pool:
+  aci_class: infraRsVlanNs
+  attributes:
+    domain: module.params.get("domain")
+    domain_type: module.params.get("domain_type")
+    pool: tDn
+    pool_allocation_mode: module.params.get("pool_allocation_mode")
+aci_aep_to_domain:
+  aci_class: infraRsDomP
+  attributes:
+    aep: module.params.get("aep")
+    domain: tDn
+    domain_type: module.params.get("domain_type")
+    vm_provider: module.params.get("vm_provider")
+aci_tenant:
+  aci_class: fvTenant
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    tenant: name
+aci_tenant_action_rule_profile:
+  aci_class: rtctrlAttrP
+  attributes:
+    action_rule: name
+    description: descr
+    name_alias: nameAlias
+aci_tenant_ep_retention_policy:
+  aci_class: fvEpRetPol
+  attributes:
+    bounce_age: bounceAgeIntvl
+    bounce_trigger: bounceTrig
+    description: descr
+    epr_policy: name
+    hold_interval: holdIntvl
+    local_ep_interval: localEpAgeIntvl
+    move_frequency: moveFreq
+    name_alias: nameAlias
+    remote_ep_interval: remoteEpAgeIntvl
+aci_tenant_span_dst_group:
+  aci_class: spanDestGrp
+  attributes:
+    description: descr
+    destination_group: name
+    name_alias: nameAlias
+aci_tenant_span_src_group:
+  aci_class: spanSrcGrp
+  attributes:
+    admin_state: adminSt
+    description: descr
+    name_alias: nameAlias
+    src_group: name
+aci_tenant_span_src_group_to_dst_group:
+  aci_class: spanSpanLbl
+  attributes:
+    description: descr
+    dst_group: name
+    name_alias: nameAlias
+aci_vlan_pool:
+  aci_class: fvnsVlanInstP
+  attributes:
+    description: descr
+    name_alias: nameAlias
+    pool: name
+    pool_allocation_mode: allocMode
+aci_vmm_controller:
+  aci_class: vmmCtrlrP
+  attributes:
+    controller_hostname: hostOrIp
+    datacenter: rootContName
+    dvs_version: dvsVersion
+    name: name
+    name_alias: nameAlias
+    stats_collection: statsMode
+aci_vmm_enhanced_lag_policy:
+  aci_class: lacpEnhancedLagPol
+  attributes:
+    lacp_mode: mode
+    load_balancing_mode: lbmode
+    name: name
+    number_uplinks: numLinks
+aci_vmm_uplink:
+  aci_class: vmmUplinkP
+  attributes:
+    uplink_id: uplinkId
+    uplink_name: uplinkName
+aci_vmm_uplink_container:
+  aci_class: vmmUplinkPCont
+  attributes:
+    num_of_uplinks: numOfUplinks
+aci_vrf:
+  aci_class: fvCtx
+  attributes:
+    description: descr
+    ip_data_plane_learning: ipDataPlaneLearning
+    name_alias: nameAlias
+    policy_control_direction: pcEnfDir
+    policy_control_preference: pcEnfPref
+    vrf: name
+aci_vrf_fallback_route_group:
+  aci_class: fvFBRGroup
+  attributes:
+    description: descr
+    vrf_fallback_route_group: name
+aci_vrf_leak_internal_subnet:
+  aci_class: leakInternalSubnet
+  attributes:
+    description: descr
+    ip: ip
+    name_alias: nameAlias
+    scope: scope

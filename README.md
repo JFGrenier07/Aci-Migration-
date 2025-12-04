@@ -1,0 +1,182 @@
+# ACI Migration Tool
+
+🚀 Outil autonome d'extraction de configuration ACI pour migration d'EPG
+
+## 📋 Description
+
+Cet outil permet d'extraire de manière ciblée la configuration d'EPG (Endpoint Groups) spécifiques depuis un fabric Cisco ACI, avec toutes leurs dépendances (Bridge Domains, VLANs, Domains, AEPs, Policy Groups).
+
+**Parfait pour:**
+- Migration d'EPG entre fabrics ACI
+- Backup de configuration ciblée
+- Documentation de configuration
+- Clonage de configuration EPG
+
+## ✨ Fonctionnalités
+
+- ✅ **100% Autonome** - Aucune dépendance externe
+- ✅ **Credentials Interactifs** - Demande IP/user/password au démarrage
+- ✅ **Filtrage Intelligent** - Extrait UNIQUEMENT les objets liés aux EPGs demandés
+- ✅ **Export Multi-format** - CSV + Excel
+- ✅ **Compatibilité Ansible** - CSV prêts pour déploiement
+- ✅ **Sécurisé** - Password masqué, jamais sauvegardé
+
+## 📦 Objets Extraits
+
+| Objet | Description |
+|-------|-------------|
+| EPG | Endpoint Groups |
+| Bridge Domain | avec VRF |
+| Domain | Physical/L3 |
+| VLAN Pool | avec Encap Blocks |
+| AEP | Attachable Entity Profiles |
+| Interface Policy Groups | avec toutes les policies (CDP, LLDP, etc.) |
+
+**+ Toutes les relations entre ces objets**
+
+## 🚀 Installation
+
+```bash
+# Cloner le repository
+git clone https://github.com/JFGrenier07/Aci-Migration-.git
+cd Aci-Migration-
+
+# Installer les dépendances Python
+pip install pandas openpyxl requests pyyaml urllib3
+```
+
+## 📖 Utilisation Rapide
+
+### 1. Lister les EPG disponibles
+
+```bash
+python3 list_all_epgs.py
+```
+
+**Le script demande:**
+```
+🌐 Adresse IP de l'APIC: 192.168.0.245
+👤 Nom d'utilisateur: admin
+🔒 Mot de passe: ********
+```
+
+### 2. Éditer la liste des EPG à extraire
+
+```yaml
+# epg_list.yml
+---
+tenant: Production
+ap: Database_AP
+epgs:
+  - DBServers_EPG
+
+---
+tenant: Production
+ap: ERP_AP
+epgs:
+  - AppServers_EPG
+```
+
+### 3. Lancer l'extraction
+
+```bash
+python3 extract_epg_migration.py
+```
+
+**Résultat:**
+- CSV dans `csv_out/` (11 fichiers)
+- Excel `epg_migration.xlsx` (10 onglets)
+
+## 📂 Structure du Projet
+
+```
+Aci-Migration-/
+├── extract_epg_migration.py           # Script principal
+├── list_all_epgs.py                   # Utilitaire liste EPG
+├── epg_list.yml                       # Config EPG à extraire
+├── csv_out/                           # CSV générés
+│   └── .gitkeep
+├── README.md                          # Ce fichier
+├── README_MIGRATION.md                # Guide détaillé
+├── MIGRATION_DEPENDENCIES.md          # Analyse dépendances
+├── CHANGELOG_V2.md                    # Changelog v2.0
+├── CSV_TASK_ALIGNMENT_VALIDATION.md   # Validation CSV
+└── MIGRATION_TOOL_READY.md            # Documentation production
+```
+
+## 📚 Documentation
+
+- **[README_MIGRATION.md](README_MIGRATION.md)** - Guide complet d'utilisation
+- **[CHANGELOG_V2.md](CHANGELOG_V2.md)** - Historique des versions
+- **[MIGRATION_DEPENDENCIES.md](MIGRATION_DEPENDENCIES.md)** - Analyse des dépendances
+
+## 🔐 Sécurité
+
+- Password masqué pendant la saisie (`getpass`)
+- Credentials jamais sauvegardés sur disque
+- Utilisation en mémoire uniquement
+- SSL warnings désactivés (normal pour certificats auto-signés ACI)
+
+## 🎯 Exemple Complet
+
+```bash
+# 1. Lister les EPG
+python3 list_all_epgs.py
+# → Noter les noms exacts
+
+# 2. Éditer epg_list.yml
+nano epg_list.yml
+
+# 3. Extraire
+python3 extract_epg_migration.py
+# → Entrer credentials
+# → Attendre extraction
+
+# 4. Vérifier résultats
+ls csv_out/
+ls -lh epg_migration.xlsx
+```
+
+## 🧪 Tests
+
+Testé avec:
+- ✅ Cisco ACI 5.x
+- ✅ Cisco ACI 6.x
+- ✅ Python 3.8+
+- ✅ Multiple fabrics
+
+## 🤝 Contribution
+
+Les contributions sont les bienvenues! N'hésitez pas à:
+- 🐛 Signaler des bugs
+- 💡 Proposer des améliorations
+- 📝 Améliorer la documentation
+
+## 📝 License
+
+MIT License - Libre d'utilisation
+
+## 👤 Auteur
+
+**JF Grenier**
+- GitHub: [@JFGrenier07](https://github.com/JFGrenier07)
+- Tool: Développé avec Claude Code
+
+## 🔄 Version
+
+**Version actuelle: 2.0**
+- Credentials interactifs
+- 100% autonome
+- Support Interface Policy Groups
+
+Voir [CHANGELOG_V2.md](CHANGELOG_V2.md) pour détails
+
+## ⭐ Support
+
+Si cet outil vous est utile, n'oubliez pas de mettre une ⭐ sur GitHub!
+
+---
+
+**Status:** ✅ Production Ready  
+**Date:** 2025-12-04  
+**Développé avec:** Claude Code + ❤️
