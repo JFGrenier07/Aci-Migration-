@@ -76,6 +76,20 @@ class EPGMigrationExtractor:
         for cfg in self.epg_configs:
             print(f"   - {cfg['tenant']}/{cfg['ap']}/{cfg['epg']}")
 
+    def choose_mode(self):
+        """Demande le mode d'extraction"""
+        print("\n" + "="*80)
+        print(" MODE D'EXTRACTION")
+        print("="*80)
+        print("\n1. 🌐 Connexion LIVE à l'APIC")
+        print("2. 📦 Backup JSON (fichier local)")
+
+        while True:
+            choice = input("\nChoisir le mode (1 ou 2): ").strip()
+            if choice in ['1', '2']:
+                return choice
+            print("❌ Choix invalide. Entrer 1 ou 2.")
+
     def get_credentials(self):
         """Demande les credentials de manière interactive"""
         print("\n" + "="*80)
@@ -102,6 +116,38 @@ class EPGMigrationExtractor:
             'user': user,
             'password': password
         }
+
+    def load_from_backup(self):
+        """Charge la configuration depuis un fichier JSON de backup"""
+        print("\n" + "="*80)
+        print(" CHARGEMENT DEPUIS BACKUP JSON")
+        print("="*80)
+
+        json_file = input("\n📁 Chemin du fichier JSON: ").strip()
+
+        if not json_file:
+            print("❌ Chemin du fichier requis")
+            sys.exit(1)
+
+        # Si chemin relatif, l'ajouter au base_dir
+        if not os.path.isabs(json_file):
+            json_file = os.path.join(self.base_dir, json_file)
+
+        if not os.path.exists(json_file):
+            print(f"❌ Fichier non trouvé: {json_file}")
+            sys.exit(1)
+
+        print(f"\n📥 Chargement de {json_file}...")
+        try:
+            with open(json_file, 'r', encoding='utf-8') as f:
+                self.aci_data = json.load(f)
+            print("✅ Backup chargé avec succès")
+        except json.JSONDecodeError as e:
+            print(f"❌ Erreur JSON: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ Erreur lors du chargement: {e}")
+            sys.exit(1)
 
     def login(self, session, url, user, password):
         """Authentification APIC"""
@@ -612,11 +658,24 @@ class EPGMigrationExtractor:
     def run(self):
         """Exécution principale"""
         print("="*80)
-        print(" EPG MIGRATION EXTRACTOR - Version Simplifiée")
+        print(" EPG MIGRATION EXTRACTOR - Version 2.0")
         print("="*80)
 
+        # Charger la liste des EPG à extraire
         self.load_epg_list()
-        self.extract_from_apic()
+
+        # Demander le mode d'extraction
+        mode = self.choose_mode()
+
+        # Charger la configuration selon le mode
+        if mode == '1':
+            # Mode Live: connexion à l'APIC
+            self.extract_from_apic()
+        else:
+            # Mode Backup: charger depuis JSON
+            self.load_from_backup()
+
+        # Extraction des objets (identique pour les 2 modes)
         self.identify_and_extract_objects()
         self.generate_csvs()
         self.generate_excel()

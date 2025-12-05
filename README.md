@@ -47,7 +47,18 @@ pip install pandas openpyxl requests pyyaml urllib3
 
 ## 📖 Utilisation Rapide
 
-### 1. Lister les EPG disponibles
+### Choix du Mode
+
+Le script supporte **2 modes** d'extraction:
+
+1. **🌐 Mode LIVE** - Connexion directe à l'APIC
+2. **📦 Mode BACKUP** - Lecture d'un fichier JSON local
+
+---
+
+### Mode 1: Connexion LIVE à l'APIC
+
+#### 1. Lister les EPG disponibles (optionnel)
 
 ```bash
 python3 list_all_epgs.py
@@ -60,7 +71,7 @@ python3 list_all_epgs.py
 🔒 Mot de passe: ********
 ```
 
-### 2. Éditer la liste des EPG à extraire
+#### 2. Éditer la liste des EPG à extraire
 
 ```yaml
 # epg_list.yml
@@ -77,15 +88,75 @@ epgs:
   - AppServers_EPG
 ```
 
-### 3. Lancer l'extraction
+#### 3. Lancer l'extraction
 
 ```bash
 python3 extract_epg_migration.py
 ```
 
+**Le script demande:**
+```
+MODE D'EXTRACTION
+1. 🌐 Connexion LIVE à l'APIC
+2. 📦 Backup JSON (fichier local)
+
+Choisir le mode (1 ou 2): 1
+
+CONNEXION À L'ACI FABRIC
+🌐 Adresse IP de l'APIC: 192.168.0.245
+👤 Nom d'utilisateur: admin
+🔒 Mot de passe: ********
+```
+
 **Résultat:**
 - CSV dans `csv_out/` (11 fichiers)
 - Excel `epg_migration.xlsx` (10 onglets)
+
+---
+
+### Mode 2: Depuis un Backup JSON
+
+#### 1. Préparer le fichier JSON
+
+Place ton snapshot ACI (format JSON) dans le répertoire:
+```
+migration/
+├── extract_epg_migration.py
+├── fabric_snapshot.json    ← Ton backup ici
+└── epg_list.yml
+```
+
+Le fichier JSON doit contenir la config complète de l'APIC (format API standard).
+
+#### 2. Éditer epg_list.yml
+
+Même chose que mode Live - liste tes EPG.
+
+#### 3. Lancer l'extraction
+
+```bash
+python3 extract_epg_migration.py
+```
+
+**Le script demande:**
+```
+MODE D'EXTRACTION
+1. 🌐 Connexion LIVE à l'APIC
+2. 📦 Backup JSON (fichier local)
+
+Choisir le mode (1 ou 2): 2
+
+CHARGEMENT DEPUIS BACKUP JSON
+📁 Chemin du fichier JSON: fabric_snapshot.json
+```
+
+**Avantages du mode Backup:**
+- ✅ Pas besoin de credentials
+- ✅ Travail hors ligne
+- ✅ Tests sans accès à la fabric
+- ✅ Plus rapide (pas de connexion réseau)
+
+**Résultat:** Identique au mode Live!
 
 ## 📂 Fichiers du Projet
 

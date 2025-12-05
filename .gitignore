@@ -31,3 +31,5 @@ Thumbs.db
 # Garder la structure des répertoires
 !csv_out/.gitkeep
 .~lock.*
+*.tar.gz
+*.json
