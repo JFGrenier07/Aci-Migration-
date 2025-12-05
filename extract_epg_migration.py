@@ -156,7 +156,21 @@ class EPGMigrationExtractor:
         print(f"\n📥 Chargement de {os.path.basename(json_file)}...")
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
-                self.aci_data = json.load(f)
+                data = json.load(f)
+
+            # Vérifier le format du JSON
+            if 'polUni' in data:
+                # Format hiérarchique (snapshot ACI) - convertir en format imdata
+                print("   → Format détecté: Snapshot hiérarchique ACI")
+                self.aci_data = self._convert_poluni_to_imdata(data)
+            elif 'imdata' in data:
+                # Format API standard
+                print("   → Format détecté: API standard ACI")
+                self.aci_data = data
+            else:
+                print("❌ Format JSON non reconnu (ni polUni ni imdata)")
+                sys.exit(1)
+
             print("✅ Backup JSON chargé avec succès")
         except json.JSONDecodeError as e:
             print(f"❌ Erreur JSON: {e}")
@@ -164,6 +178,74 @@ class EPGMigrationExtractor:
         except Exception as e:
             print(f"❌ Erreur lors du chargement: {e}")
             sys.exit(1)
+
+    def _convert_poluni_to_imdata(self, data):
+        """Convertit le format hiérarchique polUni en format imdata plat"""
+        imdata = []
+
+        def build_dn(class_name, name, parent_dn="uni"):
+            """Construit le DN basé sur la classe et le nom"""
+            # Mapping des classes vers leurs préfixes DN
+            dn_prefixes = {
+                'fvTenant': 'tn',
+                'fvAp': 'ap',
+                'fvAEPg': 'epg',
+                'fvBD': 'BD',
+                'fvCtx': 'ctx',
+                'physDomP': 'phys',
+                'l3extDomP': 'l3dom',
+                'vmmDomP': 'vmmp',
+                'fvnsVlanInstP': 'vlanns',
+                'infraAttEntityP': 'attentp',
+                'infraAccPortGrp': 'accportgrp',
+                'infraAccBndlGrp': 'accbundle',
+            }
+
+            if class_name in dn_prefixes and name:
+                prefix = dn_prefixes[class_name]
+                return f"{parent_dn}/{prefix}-{name}"
+            return parent_dn
+
+        def flatten_obj(obj, parent_dn="uni"):
+            """Fonction récursive pour aplatir la hiérarchie"""
+            if isinstance(obj, dict):
+                # Parcourir toutes les clés de l'objet
+                for key, value in obj.items():
+                    # Ignorer les clés spéciales
+                    if key in ['children', 'attributes']:
+                        continue
+
+                    if isinstance(value, dict):
+                        # Si c'est un objet ACI (a des attributes), l'ajouter
+                        if 'attributes' in value:
+                            # Reconstruire le DN si vide
+                            attrs = value['attributes']
+                            if 'dn' in attrs and not attrs['dn']:
+                                name = attrs.get('name', '')
+                                attrs['dn'] = build_dn(key, name, parent_dn)
+
+                            current_dn = attrs.get('dn', parent_dn)
+                            imdata.append({key: value})
+
+                            # Traiter les enfants récursivement avec le DN actuel
+                            if 'children' in value and isinstance(value['children'], list):
+                                for child in value['children']:
+                                    flatten_obj(child, current_dn)
+                        else:
+                            # Traiter les autres clés récursivement
+                            flatten_obj(value, parent_dn)
+
+            elif isinstance(obj, list):
+                for item in obj:
+                    flatten_obj(item, parent_dn)
+
+        # Commencer l'aplatissement depuis les enfants de polUni
+        if 'polUni' in data and 'children' in data['polUni']:
+            for child in data['polUni']['children']:
+                flatten_obj(child, "uni")
+
+        print(f"   → {len(imdata)} objets convertis du format hiérarchique")
+        return {'imdata': imdata}
 
     def _load_from_targz(self, targz_file):
         """Charge depuis une archive tar.gz (snapshot ACI)"""
@@ -701,10 +783,28 @@ class EPGMigrationExtractor:
         """Génère le fichier Excel"""
         print(f"\n📊 Génération de l'Excel: {self.output_excel}")
 
+        # Vérifier s'il y a des données à exporter
+        csv_files = sorted([f for f in os.listdir(self.csv_dir) if f.endswith('.csv')])
+        has_data = False
+
+        # Vérifier si au moins un CSV contient des données
+        for csv_file in csv_files:
+            csv_path = os.path.join(self.csv_dir, csv_file)
+            try:
+                df = pd.read_csv(csv_path)
+                if not df.empty:
+                    has_data = True
+                    break
+            except:
+                pass
+
+        if not has_data:
+            print("\n⚠️  Aucune donnée trouvée - Excel non généré")
+            print("\n💡 Conseil: Vérifiez que les EPG dans epg_list.yml existent dans le backup")
+            return
+
         sheets_written = 0
         with pd.ExcelWriter(self.output_excel, engine='openpyxl') as writer:
-            csv_files = sorted([f for f in os.listdir(self.csv_dir) if f.endswith('.csv')])
-
             for csv_file in csv_files:
                 sheet_name = csv_file.replace('.csv', '')
                 csv_path = os.path.join(self.csv_dir, csv_file)
