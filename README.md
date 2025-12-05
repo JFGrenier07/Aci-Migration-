@@ -114,19 +114,22 @@ CONNEXION À L'ACI FABRIC
 
 ---
 
-### Mode 2: Depuis un Backup JSON
+### Mode 2: Depuis un Backup JSON ou tar.gz
 
-#### 1. Préparer le fichier JSON
+#### 1. Préparer le fichier de backup
 
-Place ton snapshot ACI (format JSON) dans le répertoire:
+Place ton snapshot ACI dans le répertoire:
 ```
 migration/
 ├── extract_epg_migration.py
-├── fabric_snapshot.json    ← Ton backup ici
+├── fabric_snapshot.json      ← Backup JSON direct
+├── fabric_snapshot.tar.gz    ← OU snapshot ACI complet
 └── epg_list.yml
 ```
 
-Le fichier JSON doit contenir la config complète de l'APIC (format API standard).
+**Formats supportés:**
+- `.json` - Fichier JSON direct (format API ACI)
+- `.tar.gz` ou `.tgz` - Archive de snapshot ACI (extraction automatique)
 
 #### 2. Éditer epg_list.yml
 
@@ -146,8 +149,8 @@ MODE D'EXTRACTION
 
 Choisir le mode (1 ou 2): 2
 
-CHARGEMENT DEPUIS BACKUP JSON
-📁 Chemin du fichier JSON: fabric_snapshot.json
+CHARGEMENT DEPUIS BACKUP
+📁 Chemin du fichier (JSON ou tar.gz): fabric_snapshot.tar.gz
 ```
 
 **Avantages du mode Backup:**
@@ -237,9 +240,11 @@ MIT License - Libre d'utilisation
 
 ## 🔄 Version
 
-**Version actuelle: 2.0**
+**Version actuelle: 2.1**
 - ✅ Credentials interactifs (IP/user/password)
 - ✅ 100% autonome (aucune dépendance externe)
+- ✅ Support tar.gz (extraction automatique des snapshots ACI)
+- ✅ Dual-mode: Live APIC ou Backup local
 - ✅ Support Interface Policy Groups
 - ✅ Export CSV + Excel
 

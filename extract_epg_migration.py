@@ -14,6 +14,9 @@ import requests
 import urllib3
 import re
 import getpass
+import tarfile
+import tempfile
+import shutil
 from pathlib import Path
 from collections import defaultdict
 
@@ -118,36 +121,98 @@ class EPGMigrationExtractor:
         }
 
     def load_from_backup(self):
-        """Charge la configuration depuis un fichier JSON de backup"""
+        """Charge la configuration depuis un fichier JSON ou tar.gz de backup"""
         print("\n" + "="*80)
-        print(" CHARGEMENT DEPUIS BACKUP JSON")
+        print(" CHARGEMENT DEPUIS BACKUP")
         print("="*80)
 
-        json_file = input("\n📁 Chemin du fichier JSON: ").strip()
+        backup_file = input("\n📁 Chemin du fichier (JSON ou tar.gz): ").strip()
 
-        if not json_file:
+        if not backup_file:
             print("❌ Chemin du fichier requis")
             sys.exit(1)
 
         # Si chemin relatif, l'ajouter au base_dir
-        if not os.path.isabs(json_file):
-            json_file = os.path.join(self.base_dir, json_file)
+        if not os.path.isabs(backup_file):
+            backup_file = os.path.join(self.base_dir, backup_file)
 
-        if not os.path.exists(json_file):
-            print(f"❌ Fichier non trouvé: {json_file}")
+        if not os.path.exists(backup_file):
+            print(f"❌ Fichier non trouvé: {backup_file}")
             sys.exit(1)
 
-        print(f"\n📥 Chargement de {json_file}...")
+        # Vérifier le type de fichier
+        if backup_file.endswith('.tar.gz') or backup_file.endswith('.tgz'):
+            # C'est une archive tar.gz
+            self._load_from_targz(backup_file)
+        elif backup_file.endswith('.json'):
+            # C'est un fichier JSON direct
+            self._load_from_json(backup_file)
+        else:
+            print(f"❌ Format non supporté. Utiliser .json ou .tar.gz")
+            sys.exit(1)
+
+    def _load_from_json(self, json_file):
+        """Charge depuis un fichier JSON"""
+        print(f"\n📥 Chargement de {os.path.basename(json_file)}...")
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
                 self.aci_data = json.load(f)
-            print("✅ Backup chargé avec succès")
+            print("✅ Backup JSON chargé avec succès")
         except json.JSONDecodeError as e:
             print(f"❌ Erreur JSON: {e}")
             sys.exit(1)
         except Exception as e:
             print(f"❌ Erreur lors du chargement: {e}")
             sys.exit(1)
+
+    def _load_from_targz(self, targz_file):
+        """Charge depuis une archive tar.gz (snapshot ACI)"""
+        print(f"\n📦 Extraction de {os.path.basename(targz_file)}...")
+
+        temp_dir = None
+        try:
+            # Créer un répertoire temporaire
+            temp_dir = tempfile.mkdtemp(prefix='aci_backup_')
+
+            # Extraire l'archive
+            with tarfile.open(targz_file, 'r:gz') as tar:
+                tar.extractall(path=temp_dir)
+
+            # Chercher le fichier JSON principal (généralement *_1.json)
+            json_files = []
+            for root, dirs, files in os.walk(temp_dir):
+                for file in files:
+                    if file.endswith('_1.json'):
+                        json_files.append(os.path.join(root, file))
+
+            if not json_files:
+                # Si pas de *_1.json, chercher n'importe quel .json
+                for root, dirs, files in os.walk(temp_dir):
+                    for file in files:
+                        if file.endswith('.json') and not file.endswith('.md5'):
+                            json_files.append(os.path.join(root, file))
+
+            if not json_files:
+                print(f"❌ Aucun fichier JSON trouvé dans l'archive")
+                sys.exit(1)
+
+            # Utiliser le premier fichier trouvé (normalement le *_1.json)
+            json_file = json_files[0]
+            print(f"   → Fichier trouvé: {os.path.basename(json_file)}")
+
+            # Charger le JSON
+            self._load_from_json(json_file)
+
+        except tarfile.TarError as e:
+            print(f"❌ Erreur d'extraction: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ Erreur: {e}")
+            sys.exit(1)
+        finally:
+            # Nettoyer le répertoire temporaire
+            if temp_dir and os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
 
     def login(self, session, url, user, password):
         """Authentification APIC"""
@@ -658,7 +723,7 @@ class EPGMigrationExtractor:
     def run(self):
         """Exécution principale"""
         print("="*80)
-        print(" EPG MIGRATION EXTRACTOR - Version 2.0")
+        print(" EPG MIGRATION EXTRACTOR - Version 2.1")
         print("="*80)
 
         # Charger la liste des EPG à extraire
