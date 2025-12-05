@@ -183,9 +183,36 @@ class EPGMigrationExtractor:
         """Convertit le format hiérarchique polUni en format imdata plat"""
         imdata = []
 
-        def build_dn(class_name, name, parent_dn="uni"):
-            """Construit le DN basé sur la classe et le nom"""
-            # Mapping des classes vers leurs préfixes DN
+        def build_dn(class_name, attrs, parent_dn="uni"):
+            """Construit le DN basé sur la classe et les attributs"""
+            name = attrs.get('name', '')
+
+            # Cas spéciaux qui nécessitent des attributs supplémentaires
+            if class_name == 'fvnsVlanInstP':
+                # VLAN Pool: uni/infra/vlanns-[NAME]-[ALLOCMODE]
+                alloc_mode = attrs.get('allocMode', 'dynamic')
+                if name:
+                    return f"uni/infra/vlanns-[{name}]-{alloc_mode}"
+
+            elif class_name == 'fvnsEncapBlk':
+                # Encap Block: [PARENT_DN]/from-[FROM]-to-[TO]
+                from_vlan = attrs.get('from', '')
+                to_vlan = attrs.get('to', '')
+                if from_vlan and to_vlan:
+                    return f"{parent_dn}/from-[{from_vlan}]-to-[{to_vlan}]"
+
+            # Relationship objects (pas de name, juste parent_dn + suffix)
+            elif class_name == 'infraRsVlanNs':
+                return f"{parent_dn}/rsvlanNs"
+            elif class_name == 'l3extRsVlanNs':
+                return f"{parent_dn}/rsvlanNs"
+            elif class_name.startswith('fvRs') or class_name.startswith('infraRs'):
+                # Autres relationships - construire DN générique
+                rel_name = class_name[4:] if class_name.startswith('fvRs') else class_name[7:]
+                rel_name = rel_name[0].lower() + rel_name[1:]  # Première lettre en minuscule
+                return f"{parent_dn}/rs{rel_name}"
+
+            # Mapping des classes vers leurs préfixes DN standard
             dn_prefixes = {
                 'fvTenant': 'tn',
                 'fvAp': 'ap',
@@ -195,7 +222,6 @@ class EPGMigrationExtractor:
                 'physDomP': 'phys',
                 'l3extDomP': 'l3dom',
                 'vmmDomP': 'vmmp',
-                'fvnsVlanInstP': 'vlanns',
                 'infraAttEntityP': 'attentp',
                 'infraAccPortGrp': 'accportgrp',
                 'infraAccBndlGrp': 'accbundle',
@@ -204,6 +230,7 @@ class EPGMigrationExtractor:
             if class_name in dn_prefixes and name:
                 prefix = dn_prefixes[class_name]
                 return f"{parent_dn}/{prefix}-{name}"
+
             return parent_dn
 
         def flatten_obj(obj, parent_dn="uni"):
@@ -221,8 +248,7 @@ class EPGMigrationExtractor:
                             # Reconstruire le DN si vide
                             attrs = value['attributes']
                             if 'dn' in attrs and not attrs['dn']:
-                                name = attrs.get('name', '')
-                                attrs['dn'] = build_dn(key, name, parent_dn)
+                                attrs['dn'] = build_dn(key, attrs, parent_dn)
 
                             current_dn = attrs.get('dn', parent_dn)
                             imdata.append({key: value})
