@@ -87,28 +87,30 @@ python3 extract_epg_migration.py
 - CSV dans `csv_out/` (11 fichiers)
 - Excel `epg_migration.xlsx` (10 onglets)
 
-## 📂 Structure du Projet
+## 📂 Fichiers du Projet
+
+### ✅ Fichiers Essentiels (tout ce dont vous avez besoin!)
+
+| Fichier | Description | Requis? |
+|---------|-------------|---------|
+| `extract_epg_migration.py` | **Script principal** d'extraction | ✅ **OBLIGATOIRE** |
+| `epg_list.yml` | **Configuration** des EPG à extraire | ✅ **OBLIGATOIRE** |
+| `list_all_epgs.py` | Utilitaire pour lister tous les EPG | 🔵 **Recommandé** |
+| `README.md` | Ce guide | 📖 Documentation |
+| `.gitignore` | Config Git | ⚙️ Git seulement |
+
+### 📁 Répertoires
 
 ```
 Aci-Migration-/
-├── extract_epg_migration.py           # Script principal
-├── list_all_epgs.py                   # Utilitaire liste EPG
-├── epg_list.yml                       # Config EPG à extraire
-├── csv_out/                           # CSV générés
-│   └── .gitkeep
-├── README.md                          # Ce fichier
-├── README_MIGRATION.md                # Guide détaillé
-├── MIGRATION_DEPENDENCIES.md          # Analyse dépendances
-├── CHANGELOG_V2.md                    # Changelog v2.0
-├── CSV_TASK_ALIGNMENT_VALIDATION.md   # Validation CSV
-└── MIGRATION_TOOL_READY.md            # Documentation production
+├── extract_epg_migration.py    ← Script principal
+├── list_all_epgs.py            ← Liste les EPG (optionnel)
+├── epg_list.yml                ← Votre config
+├── csv_out/                    ← Créé automatiquement (résultats CSV)
+└── epg_migration.xlsx          ← Créé automatiquement (résultat Excel)
 ```
 
-## 📚 Documentation
-
-- **[README_MIGRATION.md](README_MIGRATION.md)** - Guide complet d'utilisation
-- **[CHANGELOG_V2.md](CHANGELOG_V2.md)** - Historique des versions
-- **[MIGRATION_DEPENDENCIES.md](MIGRATION_DEPENDENCIES.md)** - Analyse des dépendances
+**C'est tout!** Pas de fichiers compliqués, pas de configuration cachée.
 
 ## 🔐 Sécurité
 
@@ -165,11 +167,10 @@ MIT License - Libre d'utilisation
 ## 🔄 Version
 
 **Version actuelle: 2.0**
-- Credentials interactifs
-- 100% autonome
-- Support Interface Policy Groups
-
-Voir [CHANGELOG_V2.md](CHANGELOG_V2.md) pour détails
+- ✅ Credentials interactifs (IP/user/password)
+- ✅ 100% autonome (aucune dépendance externe)
+- ✅ Support Interface Policy Groups
+- ✅ Export CSV + Excel
 
 ## ⭐ Support
 
