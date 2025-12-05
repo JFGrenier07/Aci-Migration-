@@ -251,6 +251,8 @@ class EPGMigrationExtractor:
                                 attrs['dn'] = build_dn(key, attrs, parent_dn)
 
                             current_dn = attrs.get('dn', parent_dn)
+
+                            # Ajouter l'objet avec ses children intacts
                             imdata.append({key: value})
 
                             # Traiter les enfants récursivement avec le DN actuel
@@ -374,10 +376,18 @@ class EPGMigrationExtractor:
             sys.exit(1)
 
     def find_objects_recursive(self, data, target_class):
-        """Recherche récursive d'objets"""
+        """Recherche d'objets dans imdata (format API plat)"""
         found = []
 
-        if isinstance(data, dict):
+        # Pour le format API, chercher seulement dans imdata au niveau supérieur
+        if isinstance(data, dict) and 'imdata' in data:
+            for item in data['imdata']:
+                if isinstance(item, dict):
+                    for key, value in item.items():
+                        if key == target_class:
+                            found.append(value)
+        # Fallback pour d'autres structures (ne devrait plus être nécessaire)
+        elif isinstance(data, dict):
             for key, value in data.items():
                 if key == target_class:
                     found.append(value)
