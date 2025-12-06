@@ -572,6 +572,7 @@ class EPGMigrationExtractor:
                                 # Sauvegarder le domain
                                 domain_data = {
                                     'domain': domain_name,
+                                    'description': '',
                                     'domain_type': domain_type
                                 }
                                 if domain_data not in self.found_domains:
@@ -695,6 +696,7 @@ class EPGMigrationExtractor:
                 if domain_name:
                     domain_data = {
                         'domain': domain_name,
+                        'description': '',
                         'domain_type': 'l3dom'
                     }
                     if domain_data not in self.found_domains:
@@ -717,7 +719,6 @@ class EPGMigrationExtractor:
                         'tenant': tenant_name,
                         'l3out': l3out_name,
                         'node_profile': node_profile_name,
-                        'target_dscp': np_attr.get('targetDscp', 'unspecified'),
                         'description': np_attr.get('descr', '')
                     })
 
@@ -748,7 +749,8 @@ class EPGMigrationExtractor:
                                     'pod_id': '1',
                                     'node_id': node_id,
                                     'router_id': router_id,
-                                    'router_id_as_loopback': 'no'
+                                    'router_id_as_loopback': 'no',
+                                    'loopback_address': ''  # Optional loopback address
                                 })
 
                         # ========================================================
@@ -856,11 +858,12 @@ class EPGMigrationExtractor:
                                         'interface_profile': if_profile_name,
                                         'pod_id': path_info.get('pod_id', ''),
                                         'node_id': path_info.get('node_id', ''),
-                                        'interface': path_info.get('interface', ''),
-                                        'ip_address': ip_address,
-                                        'encap': encap,
+                                        'path_ep': path_info.get('interface', ''),
                                         'interface_type': if_inst_t,
-                                        'description': int_attr.get('descr', '')
+                                        'encap': encap,
+                                        'mode': int_attr.get('mode', 'regular'),
+                                        'address': ip_address,
+                                        'mtu': int_attr.get('mtu', 'inherit')
                                     })
 
                                 # ================================================
@@ -882,9 +885,15 @@ class EPGMigrationExtractor:
                                                 'node_profile': node_profile_name,
                                                 'interface_profile': if_profile_name,
                                                 'pod_id': '1',
-                                                'floating_ip': floating_ip,
+                                                'node_id': '',  # Extracted from l3extMember if available
                                                 'encap': encap,
-                                                'description': svi_attr.get('descr', '')
+                                                'encap_scope': svi_attr.get('encapScope', 'local'),
+                                                'address': floating_ip,
+                                                'mode': svi_attr.get('mode', 'regular'),
+                                                'auto_state': svi_attr.get('autostate', 'enabled'),
+                                                'dscp': svi_attr.get('targetDscp', 'unspecified'),
+                                                'ipv6_dad': svi_attr.get('ipv6Dad', 'enabled'),
+                                                'mtu': svi_attr.get('mtu', 'inherit')
                                             })
 
                                             # Extract Floating SVI Paths
@@ -1020,6 +1029,7 @@ class EPGMigrationExtractor:
                                         'extepg': extepg_name,
                                         'network': subnet_ip,
                                         'scope': 'import-security',
+                                        'subnet_name': subnet_attr.get('name', ''),
                                         'description': subnet_attr.get('descr', '')
                                     })
 
@@ -1062,8 +1072,7 @@ class EPGMigrationExtractor:
                         self.found_route_control_profiles.append({
                             'tenant': tenant_name,
                             'l3out': l3out_name,
-                            'route_control_profile': profile_name,
-                            'description': profile_attr.get('descr', '')
+                            'route_control_profile': profile_name
                         })
 
                         # Extract children of route control profile
