@@ -654,10 +654,10 @@ class EPGMigrationExtractor:
                 l3out_attr = l3out_obj.get('attributes', {})
                 l3out_children = l3out_obj.get('children', [])
 
-                # Extract VRF and domain
+                # Extract VRF, domain, and L3 protocols
                 vrf_name = ''
                 domain_name = ''
-                route_control_profile = ''
+                l3protocols = []
 
                 for l3out_child in l3out_children:
                     if 'l3extRsEctx' in l3out_child:
@@ -668,8 +668,16 @@ class EPGMigrationExtractor:
                             match = re.search(r'/l3dom-([^/]+)', tDn)
                             if match:
                                 domain_name = match.group(1)
-                    elif 'rtctrlProfile' in l3out_child:
-                        route_control_profile = l3out_child['rtctrlProfile']['attributes'].get('name', '')
+                    # Detect L3 protocols from children
+                    elif 'bgpExtP' in l3out_child:
+                        if 'bgp' not in l3protocols:
+                            l3protocols.append('bgp')
+                    elif 'ospfExtP' in l3out_child:
+                        if 'ospf' not in l3protocols:
+                            l3protocols.append('ospf')
+                    elif 'eigrpExtP' in l3out_child:
+                        if 'eigrp' not in l3protocols:
+                            l3protocols.append('eigrp')
 
                 # Save L3Out
                 self.found_l3outs.append({
@@ -677,8 +685,8 @@ class EPGMigrationExtractor:
                     'l3out': l3out_name,
                     'vrf': vrf_name,
                     'domain': domain_name,
-                    'l3protocol': '',
-                    'route_control': route_control_profile,
+                    'l3protocol': ','.join(l3protocols) if l3protocols else '',
+                    'route_control': l3out_attr.get('enforceRtctrl', 'export'),
                     'description': l3out_attr.get('descr', '')
                 })
                 found_l3out_names.add(f"{tenant_name}/{l3out_name}")
@@ -806,18 +814,39 @@ class EPGMigrationExtractor:
                                             ip_address = int_c['l3extIp']['attributes'].get('addr', '')
                                         elif 'bgpPeerP' in int_c:
                                             # BGP Peer for Standard L3Out
-                                            peer_attr = int_c['bgpPeerP']['attributes']
+                                            peer_data = int_c['bgpPeerP']
+                                            peer_attr = peer_data['attributes']
                                             peer_ip = peer_attr.get('addr', '')
 
                                             if peer_ip:
+                                                # Extract remote_asn and local_as_number from children
+                                                remote_asn = ''
+                                                local_as_number = ''
+                                                local_as_number_config = ''
+                                                peer_children = peer_data.get('children', [])
+                                                for peer_child in peer_children:
+                                                    if 'bgpAsP' in peer_child:
+                                                        remote_asn = peer_child['bgpAsP']['attributes'].get('asn', '')
+                                                    elif 'bgpLocalAsnP' in peer_child:
+                                                        local_as_attr = peer_child['bgpLocalAsnP']['attributes']
+                                                        local_as_number = local_as_attr.get('localAsn', '')
+                                                        local_as_number_config = local_as_attr.get('asnPropagate', '')
+
                                                 self.found_l3out_bgp_peers.append({
                                                     'tenant': tenant_name,
                                                     'l3out': l3out_name,
                                                     'node_profile': node_profile_name,
                                                     'interface_profile': if_profile_name,
+                                                    'pod_id': path_info.get('pod_id', ''),
                                                     'peer_ip': peer_ip,
-                                                    'remote_as': peer_attr.get('asn', ''),
-                                                    'description': peer_attr.get('descr', '')
+                                                    'remote_asn': remote_asn,
+                                                    'node_id': path_info.get('node_id', ''),
+                                                    'path_ep': tDn,
+                                                    'bgp_controls': peer_attr.get('ctrl', ''),
+                                                    'peer_controls': peer_attr.get('peerCtrl', ''),
+                                                    'admin_state': peer_attr.get('adminSt', ''),
+                                                    'local_as_number': local_as_number,
+                                                    'local_as_number_config': local_as_number_config
                                                 })
 
                                     self.found_l3out_interfaces.append({
