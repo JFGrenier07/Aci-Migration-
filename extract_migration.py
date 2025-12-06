@@ -616,6 +616,7 @@ class EPGMigrationExtractor:
             print("="*80)
 
             found_l3out_names = set()
+            referenced_match_rules = set()  # Track which match_rules are referenced by route_control_context
 
             for l3out_cfg in self.l3out_configs:
                 tenant_name = l3out_cfg['tenant']
@@ -907,23 +908,52 @@ class EPGMigrationExtractor:
                                 if_profile_name = np_child['l3extLIfP']['attributes'].get('name', '')
                                 if_children = np_child['l3extLIfP'].get('children', [])
 
+                                # First, try to find encap from l3extRsDynPathAtt in same interface profile
+                                encap_vlan = ''
+                                for if_child_scan in if_children:
+                                    if 'l3extRsDynPathAtt' in if_child_scan:
+                                        encap = if_child_scan['l3extRsDynPathAtt']['attributes'].get('encap', '')
+                                        # Extract VLAN from encap (format: vlan-XXX or unknown)
+                                        if encap and encap.startswith('vlan-'):
+                                            encap_vlan = encap.replace('vlan-', '')
+
                                 for if_child in if_children:
                                     if 'l3extVirtualLIfP' in if_child:
                                         virt_children = if_child['l3extVirtualLIfP'].get('children', [])
                                         for virt_child in virt_children:
                                             if 'bgpPeerP' in virt_child:
-                                                peer_attr = virt_child['bgpPeerP']['attributes']
+                                                peer_data = virt_child['bgpPeerP']
+                                                peer_attr = peer_data['attributes']
                                                 peer_ip = peer_attr.get('addr', '')
 
                                                 if peer_ip:
+                                                    # Extract remote_asn and local_as_number from children
+                                                    remote_asn = ''
+                                                    local_as_number = ''
+                                                    peer_children = peer_data.get('children', [])
+                                                    for peer_child in peer_children:
+                                                        if 'bgpAsP' in peer_child:
+                                                            remote_asn = peer_child['bgpAsP']['attributes'].get('asn', '')
+                                                        elif 'bgpLocalAsnP' in peer_child:
+                                                            local_as_number = peer_child['bgpLocalAsnP']['attributes'].get('localAsn', '')
+
                                                     self.found_l3out_bgp_peers_floating.append({
                                                         'tenant': tenant_name,
                                                         'l3out': l3out_name,
                                                         'node_profile': np_obj.get('attributes', {}).get('name', ''),
                                                         'interface_profile': if_profile_name,
+                                                        'pod_id': '1',  # Default pod
+                                                        'node_id': '',  # Not available without l3extMember
+                                                        'vlan': encap_vlan,
                                                         'peer_ip': peer_ip,
-                                                        'remote_as': peer_attr.get('asn', ''),
-                                                        'description': peer_attr.get('descr', '')
+                                                        'admin_state': peer_attr.get('adminSt', ''),
+                                                        'ttl': peer_attr.get('ttl', ''),
+                                                        'weight': peer_attr.get('weight', ''),
+                                                        'remote_asn': remote_asn,
+                                                        'local_as_number': local_as_number,
+                                                        'bgp_controls': peer_attr.get('ctrl', ''),
+                                                        'peer_controls': peer_attr.get('peerCtrl', ''),
+                                                        'address_type_controls': peer_attr.get('addrTCtrl', '')
                                                     })
 
                 # ================================================================
@@ -1029,17 +1059,31 @@ class EPGMigrationExtractor:
                                 ctx_name = ctx_attr.get('name', '')
 
                                 if ctx_name:
+                                    # Extract the referenced match_rule name from rtctrlRsCtxPToSubjP
+                                    ctx_children = profile_child['rtctrlCtxP'].get('children', [])
+                                    referenced_match_rule = ctx_name  # Default to context name
+
+                                    for ctx_child in ctx_children:
+                                        if 'rtctrlRsCtxPToSubjP' in ctx_child:
+                                            # Found the relation to match_rule!
+                                            rel_attr = ctx_child['rtctrlRsCtxPToSubjP']['attributes']
+                                            match_rule_name = rel_attr.get('tnRtctrlSubjPName', '')
+                                            if match_rule_name:
+                                                referenced_match_rule = match_rule_name
+                                                referenced_match_rules.add(match_rule_name)
+                                                break
+
                                     # Route Control Context
                                     self.found_route_control_contexts.append({
                                         'tenant': tenant_name,
                                         'l3out': l3out_name,
                                         'route_control_profile': profile_name,
                                         'route_control_context': ctx_name,
-                                        'match_rule': ctx_name
+                                        'match_rule': referenced_match_rule
                                     })
 
-                                    # Extract Match Route Destinations
-                                    ctx_children = profile_child['rtctrlCtxP'].get('children', [])
+                                    # Extract Match Route Destinations (deprecated - should be in rtctrlSubjP)
+                                    # Kept for backward compatibility if they exist at context level
                                     for ctx_child in ctx_children:
                                         if 'rtctrlMatchRtDest' in ctx_child:
                                             dest_attr = ctx_child['rtctrlMatchRtDest']['attributes']
@@ -1048,7 +1092,7 @@ class EPGMigrationExtractor:
                                             if ip:
                                                 self.found_match_route_dests.append({
                                                     'tenant': tenant_name,
-                                                    'match_rule': ctx_name,
+                                                    'match_rule': referenced_match_rule,
                                                     'ip': ip
                                                 })
 
@@ -1100,8 +1144,10 @@ class EPGMigrationExtractor:
 
             # ================================================================
             # Extract Match Rules and Match Route Destinations (tenant level)
+            # ONLY for those referenced by Route Control Contexts
             # ================================================================
-            print("\n🔍 Extraction Match Rules et Match Route Destinations...")
+            print("\n🔍 Extraction Match Rules et Match Route Destinations (filtrés)...")
+            print(f"   📋 Match Rules référencés par Route Control Context: {len(referenced_match_rules)}")
 
             # Match Rules are stored as rtctrlSubjP at tenant level in some configs
             all_match_rules_tenant = self.find_objects_recursive(self.aci_data, 'rtctrlSubjP')
@@ -1112,6 +1158,10 @@ class EPGMigrationExtractor:
                 rule_name = rule_attr.get('name', '')
 
                 if not rule_name:
+                    continue
+
+                # FILTER: Only extract if this match_rule is referenced by a route_control_context
+                if rule_name not in referenced_match_rules:
                     continue
 
                 # Extract tenant from DN
@@ -1146,7 +1196,7 @@ class EPGMigrationExtractor:
                             if dest_data not in self.found_match_route_dests:
                                 self.found_match_route_dests.append(dest_data)
 
-            print(f"   ✅ Match Rules: {len(self.found_match_rules)}")
+            print(f"   ✅ Match Rules extraits: {len(self.found_match_rules)}")
             print(f"   ✅ Match Route Destinations: {len(self.found_match_route_dests)}")
 
             # Summary
