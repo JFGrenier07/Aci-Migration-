@@ -18,3 +18,15 @@ tenant: Development
 ap: DevApp_AP
 epgs:
   - DevApp_EPG
+
+
+---
+floating: no
+tenant: Production
+l3out: Test_L3Out_Prod_Standard
+
+---
+floating: yes
+tenant: Test_Tenant_Floating
+l3out: Test_L3Out_Floating
+
