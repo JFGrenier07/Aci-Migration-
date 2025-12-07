@@ -963,17 +963,22 @@ class EPGMigrationExtractor:
                                 if_profile_name = np_child['l3extLIfP']['attributes'].get('name', '')
                                 if_children = np_child['l3extLIfP'].get('children', [])
 
-                                # First, try to find encap from l3extRsDynPathAtt in same interface profile
-                                encap_vlan = ''
-                                for if_child_scan in if_children:
-                                    if 'l3extRsDynPathAtt' in if_child_scan:
-                                        encap = if_child_scan['l3extRsDynPathAtt']['attributes'].get('encap', '')
-                                        # Extract VLAN from encap (format: vlan-XXX or unknown)
-                                        if encap and encap.startswith('vlan-'):
-                                            encap_vlan = encap.replace('vlan-', '')
-
                                 for if_child in if_children:
                                     if 'l3extVirtualLIfP' in if_child:
+                                        # Extract node_id and encap from l3extVirtualLIfP attributes
+                                        virt_svi_attr = if_child['l3extVirtualLIfP'].get('attributes', {})
+                                        node_dn = virt_svi_attr.get('nodeDn', '')
+                                        # Extract node_id from nodeDn (e.g., 'topology/pod-1/node-102' → '102')
+                                        node_id_from_dn = ''
+                                        if node_dn and 'node-' in node_dn:
+                                            node_id_from_dn = node_dn.split('node-')[1].split('/')[0]
+
+                                        # Extract VLAN from encap (format: vlan-XXX)
+                                        encap_from_virt = virt_svi_attr.get('encap', '')
+                                        encap_vlan = ''
+                                        if encap_from_virt and encap_from_virt.startswith('vlan-'):
+                                            encap_vlan = encap_from_virt.replace('vlan-', '')
+
                                         virt_children = if_child['l3extVirtualLIfP'].get('children', [])
                                         for virt_child in virt_children:
                                             if 'bgpPeerP' in virt_child:
@@ -997,8 +1002,8 @@ class EPGMigrationExtractor:
                                                         'l3out': l3out_name,
                                                         'node_profile': np_obj.get('attributes', {}).get('name', ''),
                                                         'interface_profile': if_profile_name,
-                                                        'pod_id': '1',  # Default pod
-                                                        'node_id': '',  # Not available without l3extMember
+                                                        'pod_id': '1',
+                                                        'node_id': node_id_from_dn,
                                                         'vlan': encap_vlan,
                                                         'peer_ip': peer_ip,
                                                         'admin_state': peer_attr.get('adminSt', ''),
@@ -1050,7 +1055,7 @@ class EPGMigrationExtractor:
                                         'description': subnet_attr.get('descr', '')
                                     })
 
-                            # ExtEPG → Contract (Consumed)
+                            # ExtEPG → Contract (Consumer)
                             elif 'fvRsCons' in extepg_child:
                                 contract_name = extepg_child['fvRsCons']['attributes'].get('tnVzBrCPName', '')
                                 if contract_name:
@@ -1059,10 +1064,10 @@ class EPGMigrationExtractor:
                                         'l3out': l3out_name,
                                         'extepg': extepg_name,
                                         'contract': contract_name,
-                                        'contract_type': 'consumed'
+                                        'contract_type': 'consumer'
                                     })
 
-                            # ExtEPG → Contract (Provided)
+                            # ExtEPG → Contract (Provider)
                             elif 'fvRsProv' in extepg_child:
                                 contract_name = extepg_child['fvRsProv']['attributes'].get('tnVzBrCPName', '')
                                 if contract_name:
@@ -1071,7 +1076,7 @@ class EPGMigrationExtractor:
                                         'l3out': l3out_name,
                                         'extepg': extepg_name,
                                         'contract': contract_name,
-                                        'contract_type': 'provided'
+                                        'contract_type': 'provider'
                                     })
 
                 # ================================================================
