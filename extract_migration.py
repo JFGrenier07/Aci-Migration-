@@ -878,44 +878,69 @@ class EPGMigrationExtractor:
                                             encap = svi_attr.get('encap', 'unknown')
                                             floating_ip = svi_attr.get('floatingAddr', '')
 
-                                            # Save Floating SVI
-                                            self.found_l3out_floating_svis.append({
-                                                'tenant': tenant_name,
-                                                'l3out': l3out_name,
-                                                'node_profile': node_profile_name,
-                                                'interface_profile': if_profile_name,
-                                                'pod_id': '1',
-                                                'node_id': '',  # Extracted from l3extMember if available
-                                                'encap': encap,
-                                                'encap_scope': svi_attr.get('encapScope', 'local'),
-                                                'address': floating_ip,
-                                                'mode': svi_attr.get('mode', 'regular'),
-                                                'auto_state': svi_attr.get('autostate', 'enabled'),
-                                                'dscp': svi_attr.get('targetDscp', 'unspecified'),
-                                                'ipv6_dad': svi_attr.get('ipv6Dad', 'enabled'),
-                                                'mtu': svi_attr.get('mtu', 'inherit')
-                                            })
-
-                                            # Extract Floating SVI Paths
+                                            # First, collect all l3extMember to get node_id and encap info
                                             path_children = svi_child['l3extRsDynPathAtt'].get('children', [])
+                                            members = []
                                             for path_child in path_children:
                                                 if 'l3extMember' in path_child:
                                                     member_attr = path_child['l3extMember']['attributes']
-                                                    side = member_attr.get('side', '')
-                                                    ip_addr = member_attr.get('addr', '')
+                                                    members.append({
+                                                        'node_id': member_attr.get('node', ''),
+                                                        'side': member_attr.get('side', ''),
+                                                        'addr': member_attr.get('addr', '')
+                                                    })
 
+                                                    # Also save to floating_svi_paths
                                                     self.found_l3out_floating_svi_paths.append({
                                                         'tenant': tenant_name,
                                                         'l3out': l3out_name,
                                                         'node_profile': node_profile_name,
                                                         'interface_profile': if_profile_name,
                                                         'pod_id': '1',
-                                                        'node_id': '',
-                                                        'ip_address': ip_addr,
+                                                        'node_id': member_attr.get('node', ''),
+                                                        'ip_address': member_attr.get('addr', ''),
                                                         'encap': encap,
-                                                        'side': side,
+                                                        'side': member_attr.get('side', ''),
                                                         'description': member_attr.get('descr', '')
                                                     })
+
+                                            # Create one Floating SVI per member (or one if no members)
+                                            if members:
+                                                for member in members:
+                                                    self.found_l3out_floating_svis.append({
+                                                        'tenant': tenant_name,
+                                                        'l3out': l3out_name,
+                                                        'node_profile': node_profile_name,
+                                                        'interface_profile': if_profile_name,
+                                                        'pod_id': '1',
+                                                        'node_id': member['node_id'],
+                                                        'encap': encap,
+                                                        'encap_scope': svi_attr.get('encapScope', 'local'),
+                                                        'address': floating_ip,
+                                                        'mode': svi_attr.get('mode', 'regular'),
+                                                        'auto_state': svi_attr.get('autostate', 'enabled'),
+                                                        'dscp': svi_attr.get('targetDscp', 'unspecified'),
+                                                        'ipv6_dad': svi_attr.get('ipv6Dad', 'enabled'),
+                                                        'mtu': svi_attr.get('mtu', 'inherit')
+                                                    })
+                                            else:
+                                                # No members found, create one Floating SVI with empty node_id
+                                                self.found_l3out_floating_svis.append({
+                                                    'tenant': tenant_name,
+                                                    'l3out': l3out_name,
+                                                    'node_profile': node_profile_name,
+                                                    'interface_profile': if_profile_name,
+                                                    'pod_id': '1',
+                                                    'node_id': '',
+                                                    'encap': encap,
+                                                    'encap_scope': svi_attr.get('encapScope', 'local'),
+                                                    'address': floating_ip,
+                                                    'mode': svi_attr.get('mode', 'regular'),
+                                                    'auto_state': svi_attr.get('autostate', 'enabled'),
+                                                    'dscp': svi_attr.get('targetDscp', 'unspecified'),
+                                                    'ipv6_dad': svi_attr.get('ipv6Dad', 'enabled'),
+                                                    'mtu': svi_attr.get('mtu', 'inherit')
+                                                })
 
                                         # Secondary IPs for floating SVI
                                         elif 'l3extIp' in svi_child:
