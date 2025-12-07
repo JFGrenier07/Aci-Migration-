@@ -843,7 +843,7 @@ class EPGMigrationExtractor:
                                                     'peer_ip': peer_ip,
                                                     'remote_asn': remote_asn,
                                                     'node_id': path_info.get('node_id', ''),
-                                                    'path_ep': tDn,
+                                                    'path_ep': path_info.get('interface', ''),
                                                     'bgp_controls': peer_attr.get('ctrl', ''),
                                                     'peer_controls': peer_attr.get('peerCtrl', ''),
                                                     'admin_state': peer_attr.get('adminSt', ''),
