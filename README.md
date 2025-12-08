@@ -240,13 +240,22 @@ MIT License - Libre d'utilisation
 
 ## 🔄 Version
 
-**Version actuelle: 2.1**
+**Version actuelle: 2.2** (2025-12-07)
+
+### Nouveautés v2.2
+- ✅ Support L3Out complet (Standard + Floating)
+- ✅ BGP Peer Floating avec extraction correcte node_id et vlan
+- ✅ ExtEPG avec contracts (provider/consumer)
+- ✅ Route Control (profiles, contexts, match rules)
+- ✅ Filtrage BD→L3Out pour cohérence référentielle
+
+### Fonctionnalités
 - ✅ Credentials interactifs (IP/user/password)
 - ✅ 100% autonome (aucune dépendance externe)
 - ✅ Support tar.gz (extraction automatique des snapshots ACI)
 - ✅ Dual-mode: Live APIC ou Backup local
 - ✅ Support Interface Policy Groups
-- ✅ Export CSV + Excel
+- ✅ Export CSV + Excel (27 onglets)
 
 ## ⭐ Support
 
