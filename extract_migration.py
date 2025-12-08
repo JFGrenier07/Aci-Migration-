@@ -1165,7 +1165,13 @@ class EPGMigrationExtractor:
             # Get list of requested L3Out names
             requested_l3out_names = [cfg['l3out'] for cfg in self.l3out_configs]
 
-            # Clear existing bd_to_l3out (will repopulate with complete list)
+            # Get list of extracted BD names (tenant/bd pairs)
+            extracted_bd_keys = set()
+            for bd in self.found_bds:
+                bd_key = f"{bd['tenant']}/{bd['bd']}"
+                extracted_bd_keys.add(bd_key)
+
+            # Clear existing bd_to_l3out (will repopulate with filtered list)
             self.found_bd_to_l3out = []
 
             # Find ALL BDs in the fabric
@@ -1180,6 +1186,11 @@ class EPGMigrationExtractor:
                 tenant_from_dn = self.extract_tenant_from_dn(bd_dn)
 
                 if not tenant_from_dn or not bd_name:
+                    continue
+
+                # FILTER: Only process BDs that were extracted
+                bd_key = f"{tenant_from_dn}/{bd_name}"
+                if bd_key not in extracted_bd_keys:
                     continue
 
                 # Check BD children for L3Out relations
