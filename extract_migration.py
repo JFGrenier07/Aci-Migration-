@@ -887,6 +887,18 @@ class EPGMigrationExtractor:
                                         if 'l3extRsDynPathAtt' in svi_child:
                                             svi_attr = svi_child['l3extRsDynPathAtt']['attributes']
                                             floating_ip = svi_attr.get('floatingAddr', '')
+                                            tDn = svi_attr.get('tDn', '')
+
+                                            # Extract domain from tDn (e.g., "uni/phys-DOMAIN" → "DOMAIN")
+                                            domain = ''
+                                            domain_type = 'physical'
+                                            if tDn:
+                                                if '/phys-' in tDn:
+                                                    domain = tDn.split('/phys-')[1] if '/phys-' in tDn else ''
+                                                    domain_type = 'physical'
+                                                elif '/vmmp-' in tDn:
+                                                    domain = tDn.split('/vmmp-')[1].split('/')[0] if '/vmmp-' in tDn else ''
+                                                    domain_type = 'vmware'
 
                                             # First, collect all l3extMember to get node_id and encap info
                                             path_children = svi_child['l3extRsDynPathAtt'].get('children', [])
@@ -900,7 +912,7 @@ class EPGMigrationExtractor:
                                                         'addr': member_attr.get('addr', '')
                                                     })
 
-                                                    # Also save to floating_svi_paths
+                                                    # VPC case: save to floating_svi_paths (one entry per member)
                                                     self.found_l3out_floating_svi_paths.append({
                                                         'tenant': tenant_name,
                                                         'l3out': l3out_name,
@@ -908,15 +920,32 @@ class EPGMigrationExtractor:
                                                         'interface_profile': if_profile_name,
                                                         'pod_id': '1',
                                                         'node_id': member_attr.get('node', ''),
-                                                        'ip_address': member_attr.get('addr', ''),
                                                         'encap': encap_from_virtual,
-                                                        'side': member_attr.get('side', ''),
-                                                        'description': member_attr.get('descr', '')
+                                                        'access_encap': encap_from_virtual,
+                                                        'domain': domain,
+                                                        'domain_type': domain_type,
+                                                        'floating_ip': floating_ip
                                                     })
+
+                                            # Non-VPC case: if no members, extract path using parent node_id
+                                            if not members:
+                                                self.found_l3out_floating_svi_paths.append({
+                                                    'tenant': tenant_name,
+                                                    'l3out': l3out_name,
+                                                    'node_profile': node_profile_name,
+                                                    'interface_profile': if_profile_name,
+                                                    'pod_id': '1',
+                                                    'node_id': node_id_from_dn,
+                                                    'encap': encap_from_virtual,
+                                                    'access_encap': encap_from_virtual,
+                                                    'domain': domain,
+                                                    'domain_type': domain_type,
+                                                    'floating_ip': floating_ip
+                                                })
 
                                             # Create Floating SVI using data from l3extVirtualLIfP parent
                                             # Use node_id and encap from parent (l3extVirtualLIfP.attributes)
-                                            # Use floating_ip from child (l3extRsDynPathAtt.attributes)
+                                            # Use addr from parent (anchor address), NOT floating_ip from child
                                             self.found_l3out_floating_svis.append({
                                                 'tenant': tenant_name,
                                                 'l3out': l3out_name,
@@ -926,7 +955,7 @@ class EPGMigrationExtractor:
                                                 'node_id': node_id_from_dn,
                                                 'encap': encap_from_virtual,
                                                 'encap_scope': virtual_svi_attr.get('encapScope', 'local'),
-                                                'address': floating_ip,
+                                                'address': addr_from_virtual,
                                                 'mode': virtual_svi_attr.get('mode', 'regular'),
                                                 'auto_state': virtual_svi_attr.get('autostate', 'enabled'),
                                                 'dscp': virtual_svi_attr.get('targetDscp', 'unspecified'),
@@ -1403,36 +1432,78 @@ class EPGMigrationExtractor:
                             'domain_type': domain_type
                         })
 
-        # Trouver les relations AEP -> EPG (infraRsAttEntP)
-        all_aep_epg_rels = self.find_objects_recursive(self.aci_data, 'infraRsAttEntP')
+        # Extraire les relations AEP→EPG directement depuis infraRsFuncToEpg
+        # Ces objets contiennent les bindings statiques VLAN dans les AEPs
+        print("\n🔍 Extraction des relations AEP→EPG (infraRsFuncToEpg)...")
 
-        for rel_obj in all_aep_epg_rels:
-            rel_attr = rel_obj.get('attributes', {})
-            tDn = rel_attr.get('tDn', '')
-            dn = rel_attr.get('dn', '')
+        # Créer un set des EPGs extraits pour filtrer
+        extracted_epg_keys = set()
+        for epg in self.found_epgs:
+            epg_key = f"{epg['tenant']}/{epg['ap']}/{epg['epg']}"
+            extracted_epg_keys.add(epg_key)
 
-            # Vérifier si cet EPG est dans notre liste
-            for epg in self.found_epgs:
-                tenant = epg['tenant']
-                ap = epg['ap']
-                epg_name = epg['epg']
+        # Trouver tous les infraRsFuncToEpg dans le fabric
+        all_infra_funcs = self.find_objects_recursive(self.aci_data, 'infraRsFuncToEpg')
 
-                if (f"tn-{tenant}/" in tDn and
-                    f"/ap-{ap}/" in tDn and
-                    f"/epg-{epg_name}" in tDn):
+        for func_obj in all_infra_funcs:
+            func_attr = func_obj.get('attributes', {})
+            dn = func_attr.get('dn', '')
+            tDn = func_attr.get('tDn', '')
+            encap = func_attr.get('encap', '')
+            mode = func_attr.get('mode', 'regular')
 
-                    # Extraire l'AEP
-                    if '/infra/attentp-' in dn:
-                        aep_name = dn.split('/attentp-')[1].split('/')[0]
+            # Extraire le nom de l'AEP depuis le DN
+            # DN format: uni/infra/attentp-{AEP_NAME}/gen-default/rsfuncToEpg-[...]
+            aep_name = ''
+            if '/attentp-' in dn:
+                match = re.search(r'/attentp-([^/]+)/', dn)
+                if match:
+                    aep_name = match.group(1)
 
-                        # Sauvegarder la relation
-                        self.found_aep_to_epg.append({
-                            'aep': aep_name,
-                            'tenant': tenant,
-                            'ap': ap,
-                            'epg': epg_name,
-                            'interface_mode': 'trunk'
-                        })
+            # Extraire tenant/ap/epg depuis tDn
+            # tDn format: uni/tn-{TENANT}/ap-{AP}/epg-{EPG}
+            tenant = ''
+            ap = ''
+            epg_name = ''
+
+            if tDn and '/tn-' in tDn and '/ap-' in tDn and '/epg-' in tDn:
+                tn_match = re.search(r'/tn-([^/]+)/', tDn)
+                ap_match = re.search(r'/ap-([^/]+)/', tDn)
+                epg_match = re.search(r'/epg-([^/]+)(?:/|$)', tDn)
+
+                if tn_match and ap_match and epg_match:
+                    tenant = tn_match.group(1)
+                    ap = ap_match.group(1)
+                    epg_name = epg_match.group(1)
+
+            # Vérifier si cet EPG fait partie de notre extraction
+            if tenant and ap and epg_name and aep_name:
+                epg_key = f"{tenant}/{ap}/{epg_name}"
+
+                if epg_key in extracted_epg_keys:
+                    # Convertir encap de format "vlan-100" à "100"
+                    vlan_id = ''
+                    if encap and encap.startswith('vlan-'):
+                        vlan_id = encap.replace('vlan-', '')
+
+                    # Convertir mode (regular=trunk, untagged=access, native=802.1p)
+                    interface_mode = mode
+                    if mode == 'regular':
+                        interface_mode = 'trunk'
+                    elif mode == 'untagged':
+                        interface_mode = 'access'
+                    elif mode == 'native':
+                        interface_mode = '802.1p'
+
+                    # Ajouter la relation
+                    self.found_aep_to_epg.append({
+                        'aep': aep_name,
+                        'tenant': tenant,
+                        'ap': ap,
+                        'epg': epg_name,
+                        'encap': vlan_id,
+                        'interface_mode': interface_mode
+                    })
 
         # Trouver les Interface Policy Groups associés aux AEPs
         print("\n🔍 Extraction des Interface Policy Groups...")
