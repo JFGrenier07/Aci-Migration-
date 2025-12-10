@@ -1203,42 +1203,52 @@ class EPGMigrationExtractor:
             # Clear existing bd_to_l3out (will repopulate with filtered list)
             self.found_bd_to_l3out = []
 
-            # Find ALL BDs in the fabric
-            all_bds_in_fabric = self.find_objects_recursive(self.aci_data, 'fvBD')
+            # Find ALL BDs via fvTenant (supports empty DNs in backups)
+            # Use fvTenant objects instead of extracting from DN
+            all_tenants = self.find_objects_recursive(self.aci_data, 'fvTenant')
 
-            for bd_obj in all_bds_in_fabric:
-                bd_attr = bd_obj.get('attributes', {})
-                bd_dn = bd_attr.get('dn', '')
-                bd_name = bd_attr.get('name', '')
+            for tenant_obj in all_tenants:
+                tenant_attr = tenant_obj.get('attributes', {})
+                tenant_name = tenant_attr.get('name', '')
 
-                # Extract tenant name from DN
-                tenant_from_dn = self.extract_tenant_from_dn(bd_dn)
-
-                if not tenant_from_dn or not bd_name:
+                if not tenant_name:
                     continue
 
-                # FILTER: Only process BDs that were extracted
-                bd_key = f"{tenant_from_dn}/{bd_name}"
-                if bd_key not in extracted_bd_keys:
-                    continue
+                # Iterate through tenant children to find BDs
+                tenant_children = tenant_obj.get('children', [])
+                for tenant_child in tenant_children:
+                    if 'fvBD' not in tenant_child:
+                        continue
 
-                # Check BD children for L3Out relations
-                bd_children = bd_obj.get('children', [])
-                for bd_child in bd_children:
-                    if 'fvRsBDToOut' in bd_child:
-                        l3out_name_from_bd = bd_child['fvRsBDToOut']['attributes'].get('tnL3extOutName', '')
+                    bd_obj = tenant_child['fvBD']
+                    bd_attr = bd_obj.get('attributes', {})
+                    bd_name = bd_attr.get('name', '')
 
-                        # Only include if it's one of our requested L3Outs
-                        if l3out_name_from_bd in requested_l3out_names:
-                            bd_to_l3out_data = {
-                                'tenant': tenant_from_dn,
-                                'bridge_domain': bd_name,
-                                'l3out': l3out_name_from_bd
-                            }
+                    if not bd_name:
+                        continue
 
-                            # Avoid duplicates
-                            if bd_to_l3out_data not in self.found_bd_to_l3out:
-                                self.found_bd_to_l3out.append(bd_to_l3out_data)
+                    # FILTER: Only process BDs that were extracted
+                    bd_key = f"{tenant_name}/{bd_name}"
+                    if bd_key not in extracted_bd_keys:
+                        continue
+
+                    # Check BD children for L3Out relations
+                    bd_children = bd_obj.get('children', [])
+                    for bd_child in bd_children:
+                        if 'fvRsBDToOut' in bd_child:
+                            l3out_name_from_bd = bd_child['fvRsBDToOut']['attributes'].get('tnL3extOutName', '')
+
+                            # Only include if it's one of our requested L3Outs
+                            if l3out_name_from_bd in requested_l3out_names:
+                                bd_to_l3out_data = {
+                                    'tenant': tenant_name,
+                                    'bridge_domain': bd_name,
+                                    'l3out': l3out_name_from_bd
+                                }
+
+                                # Avoid duplicates
+                                if bd_to_l3out_data not in self.found_bd_to_l3out:
+                                    self.found_bd_to_l3out.append(bd_to_l3out_data)
 
             print(f"   ✅ BD→L3Out: {len(self.found_bd_to_l3out)} relations trouvées")
 
