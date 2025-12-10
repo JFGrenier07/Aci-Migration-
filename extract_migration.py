@@ -578,35 +578,53 @@ class EPGMigrationExtractor:
                                 if domain_data not in self.found_domains:
                                     self.found_domains.append(domain_data)
 
-                    # Trouver le BD pour extraire les infos
+                    # Trouver le BD pour extraire les infos via fvTenant (supports empty DNs)
                     if bd_name:
-                        all_bds = self.find_objects_recursive(self.aci_data, 'fvBD')
-                        for bd_obj in all_bds:
-                            bd_attr = bd_obj.get('attributes', {})
-                            bd_dn = bd_attr.get('dn', '')
+                        all_tenants = self.find_objects_recursive(self.aci_data, 'fvTenant')
+                        bd_found = False
 
-                            if (f"tn-{tenant_name}/" in bd_dn and
-                                bd_attr.get('name') == bd_name):
-
-                                # Extraire le VRF lié
-                                vrf_name = ''
-                                bd_children = bd_obj.get('children', [])
-                                for bd_child in bd_children:
-                                    if 'fvRsCtx' in bd_child:
-                                        vrf_name = bd_child['fvRsCtx']['attributes'].get('tnFvCtxName', '')
-                                    # Note: BD→L3Out extraction is done globally later in L3Out section
-
-                                # Sauvegarder le BD avec tous les paramètres
-                                self.found_bds.append({
-                                    'tenant': tenant_name,
-                                    'bd': bd_name,
-                                    'vrf': vrf_name,
-                                    'description': bd_attr.get('descr', ''),
-                                    'enable_routing': 'true' if bd_attr.get('unicastRoute', 'yes') == 'yes' else 'false',
-                                    'arp_flooding': 'true' if bd_attr.get('arpFlood', 'no') == 'yes' else 'false',
-                                    'l2_unknown_unicast': bd_attr.get('unkMacUcastAct', 'proxy')
-                                })
+                        for tenant_obj in all_tenants:
+                            if bd_found:
                                 break
+
+                            tenant_attr = tenant_obj.get('attributes', {})
+                            current_tenant_name = tenant_attr.get('name', '')
+
+                            # Vérifier si c'est le bon tenant
+                            if current_tenant_name != tenant_name:
+                                continue
+
+                            # Chercher le BD dans les children du tenant
+                            tenant_children = tenant_obj.get('children', [])
+                            for tenant_child in tenant_children:
+                                if 'fvBD' not in tenant_child:
+                                    continue
+
+                                bd_obj = tenant_child['fvBD']
+                                bd_attr = bd_obj.get('attributes', {})
+                                current_bd_name = bd_attr.get('name', '')
+
+                                if current_bd_name == bd_name:
+                                    # Extraire le VRF lié
+                                    vrf_name = ''
+                                    bd_children = bd_obj.get('children', [])
+                                    for bd_child in bd_children:
+                                        if 'fvRsCtx' in bd_child:
+                                            vrf_name = bd_child['fvRsCtx']['attributes'].get('tnFvCtxName', '')
+                                        # Note: BD→L3Out extraction is done globally later in L3Out section
+
+                                    # Sauvegarder le BD avec tous les paramètres
+                                    self.found_bds.append({
+                                        'tenant': tenant_name,
+                                        'bd': bd_name,
+                                        'vrf': vrf_name,
+                                        'description': bd_attr.get('descr', ''),
+                                        'enable_routing': 'true' if bd_attr.get('unicastRoute', 'yes') == 'yes' else 'false',
+                                        'arp_flooding': 'true' if bd_attr.get('arpFlood', 'no') == 'yes' else 'false',
+                                        'l2_unknown_unicast': bd_attr.get('unkMacUcastAct', 'proxy')
+                                    })
+                                    bd_found = True
+                                    break
 
         # ====================================================================
         # EXTRACTION L3OUT
