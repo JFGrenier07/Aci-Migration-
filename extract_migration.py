@@ -1203,72 +1203,6 @@ class EPGMigrationExtractor:
                                                     'ip': ip
                                                 })
 
-            # ================================================================
-            # Extract ALL BD→L3Out relations for requested L3Outs
-            # (Not just BDs linked to EPG, but ALL BDs in the fabric)
-            # ================================================================
-            print("\n🔍 Extraction complète BD→L3Out...")
-
-            # Get list of requested L3Out names
-            requested_l3out_names = [cfg['l3out'] for cfg in self.l3out_configs]
-
-            # Get list of extracted BD names (tenant/bd pairs)
-            extracted_bd_keys = set()
-            for bd in self.found_bds:
-                bd_key = f"{bd['tenant']}/{bd['bd']}"
-                extracted_bd_keys.add(bd_key)
-
-            # Clear existing bd_to_l3out (will repopulate with filtered list)
-            self.found_bd_to_l3out = []
-
-            # Find ALL BDs via fvTenant (supports empty DNs in backups)
-            # Use fvTenant objects instead of extracting from DN
-            all_tenants = self.find_objects_recursive(self.aci_data, 'fvTenant')
-
-            for tenant_obj in all_tenants:
-                tenant_attr = tenant_obj.get('attributes', {})
-                tenant_name = tenant_attr.get('name', '')
-
-                if not tenant_name:
-                    continue
-
-                # Iterate through tenant children to find BDs
-                tenant_children = tenant_obj.get('children', [])
-                for tenant_child in tenant_children:
-                    if 'fvBD' not in tenant_child:
-                        continue
-
-                    bd_obj = tenant_child['fvBD']
-                    bd_attr = bd_obj.get('attributes', {})
-                    bd_name = bd_attr.get('name', '')
-
-                    if not bd_name:
-                        continue
-
-                    # FILTER: Only process BDs that were extracted
-                    bd_key = f"{tenant_name}/{bd_name}"
-                    if bd_key not in extracted_bd_keys:
-                        continue
-
-                    # Check BD children for L3Out relations
-                    bd_children = bd_obj.get('children', [])
-                    for bd_child in bd_children:
-                        if 'fvRsBDToOut' in bd_child:
-                            l3out_name_from_bd = bd_child['fvRsBDToOut']['attributes'].get('tnL3extOutName', '')
-
-                            # Only include if it's one of our requested L3Outs
-                            if l3out_name_from_bd in requested_l3out_names:
-                                bd_to_l3out_data = {
-                                    'tenant': tenant_name,
-                                    'bridge_domain': bd_name,
-                                    'l3out': l3out_name_from_bd
-                                }
-
-                                # Avoid duplicates
-                                if bd_to_l3out_data not in self.found_bd_to_l3out:
-                                    self.found_bd_to_l3out.append(bd_to_l3out_data)
-
-            print(f"   ✅ BD→L3Out: {len(self.found_bd_to_l3out)} relations trouvées")
 
             # ================================================================
             # Extract Match Rules and Match Route Destinations (tenant level)
@@ -1459,6 +1393,69 @@ class EPGMigrationExtractor:
                             'domain': domain_name,
                             'domain_type': domain_type
                         })
+
+        # ====================================================================
+        # EXTRACTION BD→L3Out (INDÉPENDANT de l'extraction L3Out)
+        # ====================================================================
+        # Extraction de TOUTES les relations BD→L3Out pour les BDs extraits
+        # Sans filtrage par L3Out - peut inclure des L3Outs non extraits
+        print("\n🔍 Extraction des relations BD→L3Out...")
+
+        # Get list of extracted BD names (tenant/bd pairs)
+        extracted_bd_keys = set()
+        for bd in self.found_bds:
+            bd_key = f"{bd['tenant']}/{bd['bd']}"
+            extracted_bd_keys.add(bd_key)
+
+        # Clear existing bd_to_l3out
+        self.found_bd_to_l3out = []
+
+        # Find ALL BDs via fvTenant (supports empty DNs in backups)
+        all_tenants = self.find_objects_recursive(self.aci_data, 'fvTenant')
+
+        for tenant_obj in all_tenants:
+            tenant_attr = tenant_obj.get('attributes', {})
+            tenant_name = tenant_attr.get('name', '')
+
+            if not tenant_name:
+                continue
+
+            # Iterate through tenant children to find BDs
+            tenant_children = tenant_obj.get('children', [])
+            for tenant_child in tenant_children:
+                if 'fvBD' not in tenant_child:
+                    continue
+
+                bd_obj = tenant_child['fvBD']
+                bd_attr = bd_obj.get('attributes', {})
+                bd_name = bd_attr.get('name', '')
+
+                if not bd_name:
+                    continue
+
+                # FILTER: Only process BDs that were extracted
+                bd_key = f"{tenant_name}/{bd_name}"
+                if bd_key not in extracted_bd_keys:
+                    continue
+
+                # Check BD children for L3Out relations
+                bd_children = bd_obj.get('children', [])
+                for bd_child in bd_children:
+                    if 'fvRsBDToOut' in bd_child:
+                        l3out_name_from_bd = bd_child['fvRsBDToOut']['attributes'].get('tnL3extOutName', '')
+
+                        if l3out_name_from_bd:
+                            bd_to_l3out_data = {
+                                'tenant': tenant_name,
+                                'bridge_domain': bd_name,
+                                'l3out': l3out_name_from_bd
+                            }
+
+                            # Avoid duplicates
+                            if bd_to_l3out_data not in self.found_bd_to_l3out:
+                                self.found_bd_to_l3out.append(bd_to_l3out_data)
+
+        print(f"   ✅ BD→L3Out: {len(self.found_bd_to_l3out)} relations trouvées")
 
         # Extraire les relations AEP→EPG directement depuis infraRsFuncToEpg
         # Ces objets contiennent les bindings statiques VLAN dans les AEPs
