@@ -39,3 +39,4 @@ Thumbs.db
 mode1_csv/
 mode2_csv/
 epg_migration_mode2/
+*.backup

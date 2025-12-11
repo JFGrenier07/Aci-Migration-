@@ -1779,5 +1779,25 @@ class EPGMigrationExtractor:
 
 
 if __name__ == "__main__":
+    print("=" * 60)
+    print("🔧 EXTRACTION ACI POUR MIGRATION")
+    print("=" * 60)
+
+    # Demander le nom du fichier Excel de sortie
+    default_name = "epg_migration.xlsx"
+    print(f"\n📁 Nom du fichier Excel de sortie [{default_name}]: ", end="")
+    output_name = input().strip()
+
+    # Utiliser le nom par défaut si vide
+    if not output_name:
+        output_name = default_name
+
+    # Ajouter l'extension .xlsx si manquante
+    if not output_name.endswith('.xlsx'):
+        output_name += '.xlsx'
+
+    print(f"✅ Fichier de sortie: {output_name}")
+
     extractor = EPGMigrationExtractor()
+    extractor.output_excel = os.path.join(extractor.base_dir, output_name)
     extractor.run()
