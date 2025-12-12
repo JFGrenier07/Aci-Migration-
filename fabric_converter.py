@@ -33,6 +33,7 @@ class FabricConverter:
         self.tenant_mapping = {}
         self.vrf_mapping = {}
         self.ap_mapping = {}
+        self.l3out_mapping = {}  # Pour bd_to_l3out
 
         # Mappings L3Out STANDARD
         self.std_node_id_mapping = {}
@@ -282,6 +283,65 @@ class FabricConverter:
                 dest = self.prompt_mapping("AP", ap, ap)
                 self.ap_mapping[ap] = dest
 
+    def collect_bd_to_l3out_mappings(self):
+        """Collecte les mappings L3Out depuis l'onglet bd_to_l3out"""
+        # Vérifier si l'onglet existe
+        if 'bd_to_l3out' not in self.excel_data:
+            return
+
+        df = self.excel_data['bd_to_l3out']
+        columns_lower = [str(c).lower() for c in df.columns]
+
+        # Trouver la colonne l3out
+        l3out_col = None
+        for col_name in ['l3out', 'l3out_name']:
+            if col_name in columns_lower:
+                idx = columns_lower.index(col_name)
+                l3out_col = df.columns[idx]
+                break
+
+        if l3out_col is None:
+            return
+
+        # Extraire les L3Out uniques
+        unique_l3outs = df[l3out_col].dropna().unique()
+        unique_l3outs = sorted([str(v) for v in unique_l3outs if v and str(v).strip()])
+
+        if not unique_l3outs:
+            return
+
+        print("\n" + "=" * 60)
+        print("🔗 CONVERSION DES L3OUT (bd_to_l3out)")
+        print("=" * 60)
+        print("L3Out référencés par les Bridge Domains")
+        print("(Appuyez sur Entrée pour garder la même valeur)")
+
+        # Afficher le contexte pour chaque L3Out
+        for l3out in unique_l3outs:
+            # Trouver les BDs qui référencent ce L3Out
+            mask = df[l3out_col] == l3out
+            matching_rows = df[mask]
+
+            print(f"\n   {'─' * 56}")
+            print(f"   📍 L3Out: [{l3out}]")
+            print(f"      ┌─ Onglet: bd_to_l3out")
+            print(f"      │  Colonnes: {', '.join(str(h) for h in df.columns)}")
+
+            # Afficher les BDs qui utilisent ce L3Out
+            bd_list = matching_rows['bridge_domain'].tolist() if 'bridge_domain' in columns_lower else []
+            tenant_list = matching_rows['tenant'].tolist() if 'tenant' in columns_lower else []
+
+            if bd_list:
+                for i, (tenant, bd) in enumerate(zip(tenant_list[:3], bd_list[:3])):
+                    print(f"      │  BD {i+1}: {tenant}/{bd}")
+                if len(bd_list) > 3:
+                    print(f"      │  ... et {len(bd_list) - 3} autres BDs")
+
+            print(f"      └─ Total: {len(matching_rows)} Bridge Domain(s) référencent ce L3Out")
+
+            dest = self.prompt_mapping("L3Out", l3out, l3out)
+            self.l3out_mapping[l3out] = dest
+
     def collect_l3out_mappings(self, sheet_type, mapping_dict_prefix):
         """Collecte les mappings L3Out pour un type donné (standard ou floating)"""
         type_label = "STANDARD" if sheet_type == 'standard' else "FLOATING"
@@ -410,6 +470,20 @@ class FabricConverter:
                                 df.loc[mask, real_col] = dest
                                 sheet_changes += count
 
+            # Conversion L3Out (pour bd_to_l3out)
+            if sheet_name == 'bd_to_l3out':
+                for col_name in ['l3out', 'l3out_name']:
+                    if col_name in columns:
+                        idx = columns.index(col_name)
+                        real_col = df.columns[idx]
+                        for src, dest in self.l3out_mapping.items():
+                            if src != dest:
+                                mask = df[real_col] == src
+                                count = mask.sum()
+                                if count > 0:
+                                    df.loc[mask, real_col] = dest
+                                    sheet_changes += count
+
             # Sélectionner les mappings selon le type d'onglet
             if is_floating:
                 node_id_map = self.flt_node_id_mapping
@@ -537,6 +611,12 @@ class FabricConverter:
         if not has_global:
             print("   (aucun changement)")
 
+        # BD to L3Out
+        print("\n🔗 BD TO L3OUT:")
+        has_bd_l3out = show_mapping("L3Out", self.l3out_mapping, "   ")
+        if not has_bd_l3out:
+            print("   (aucun changement)")
+
         # Standard L3Out
         print("\n📐 L3OUT STANDARD:")
         has_std = False
@@ -587,11 +667,14 @@ class FabricConverter:
         # 1. Collecte des mappings globaux
         self.collect_global_mappings(global_values)
 
-        # 2. Collecte des mappings L3Out STANDARD
+        # 2. Collecte des mappings BD to L3Out
+        self.collect_bd_to_l3out_mappings()
+
+        # 3. Collecte des mappings L3Out STANDARD
         if std_sheets:
             self.collect_l3out_mappings('standard', 'std')
 
-        # 3. Collecte des mappings L3Out FLOATING
+        # 4. Collecte des mappings L3Out FLOATING
         if flt_sheets:
             self.collect_l3out_mappings('floating', 'flt')
 
