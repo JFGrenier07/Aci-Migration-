@@ -49,6 +49,10 @@ class FabricConverter:
         self.flt_path_ep_mapping = {}
         self.flt_local_as_mapping = {}
 
+        # Options supplémentaires
+        self.disable_bd_routing = False
+        self.vlan_descriptions = []  # Liste de tuples (vlan, description)
+
         # Colonnes à convertir par type
         self.tenant_columns = ['tenant']
         self.vrf_columns = ['vrf']
@@ -639,6 +643,280 @@ class FabricConverter:
         if not has_flt:
             print("   (aucun changement)")
 
+        # Options supplémentaires
+        print("\n⚙️  OPTIONS SUPPLÉMENTAIRES:")
+        if self.disable_bd_routing:
+            print("   🔀 Routage BD: sera désactivé pour tous les BD")
+        else:
+            print("   🔀 Routage BD: pas de modification")
+
+        if self.vlan_descriptions:
+            print(f"   📝 Descriptions VLAN: {len(self.vlan_descriptions)} entrée(s) à modifier")
+            for vlan, desc in self.vlan_descriptions[:5]:  # Afficher les 5 premières
+                circuit = desc.split('_')[0] if '_' in desc else desc
+                print(f"      • VLAN {vlan}: {circuit} → {desc[:40]}{'...' if len(desc) > 40 else ''}")
+            if len(self.vlan_descriptions) > 5:
+                print(f"      ... et {len(self.vlan_descriptions) - 5} autre(s)")
+        else:
+            print("   📝 Descriptions VLAN: pas de modification")
+
+    def collect_bd_routing_option(self):
+        """Demande si l'utilisateur veut désactiver le routage des BD"""
+        print("\n" + "=" * 60)
+        print("🔀 OPTION ROUTAGE BD")
+        print("=" * 60)
+        print("Désactiver le routage pour tous les Bridge Domains?")
+        print("(Mettra enable_routing = false dans l'onglet bd)")
+        print("\nDésactiver le routage? [o/N]: ", end="")
+
+        response = input().strip().lower()
+        self.disable_bd_routing = response in ['o', 'oui', 'y', 'yes']
+
+        if self.disable_bd_routing:
+            print("   ✅ Le routage sera désactivé pour tous les BD")
+        else:
+            print("   ℹ️  Le routage ne sera pas modifié")
+
+    def collect_vlan_descriptions(self):
+        """Collecte les descriptions à modifier basées sur VLAN"""
+        print("\n" + "=" * 60)
+        print("📝 MODIFICATION DES DESCRIPTIONS PAR VLAN")
+        print("=" * 60)
+        print("Voulez-vous modifier des descriptions basées sur VLAN?")
+        print("\nModifier des descriptions? [o/N]: ", end="")
+
+        response = input().strip().lower()
+        if response not in ['o', 'oui', 'y', 'yes']:
+            print("   ℹ️  Aucune modification de description")
+            return
+
+        print("\n" + "-" * 60)
+        print("Format attendu: VLAN,RLXXXXX_XXX.XXX.XXX.XXX/XX_DESCRIPTION")
+        print("Exemple: 200,RL00001_10.1.1.1/24_Serveur_Web")
+        print("-" * 60)
+        print("Collez vos lignes puis appuyez sur Entrée (ligne vide pour terminer):\n")
+
+        lines = []
+        while True:
+            try:
+                line = input()
+                if not line.strip():
+                    break
+                lines.append(line.strip())
+            except EOFError:
+                break
+
+        if not lines:
+            print("   ℹ️  Aucune ligne fournie")
+            return
+
+        # Parser les lignes
+        print(f"\n🔍 Analyse de {len(lines)} ligne(s)...")
+
+        for line in lines:
+            if ',' not in line:
+                print(f"   ⚠️  Ligne ignorée (pas de virgule): {line[:50]}...")
+                continue
+
+            parts = line.split(',', 1)  # Split sur la première virgule seulement
+            vlan_str = parts[0].strip()
+            description = parts[1].strip() if len(parts) > 1 else ''
+
+            try:
+                vlan = int(vlan_str)
+            except ValueError:
+                print(f"   ⚠️  VLAN invalide: {vlan_str}")
+                continue
+
+            if not description:
+                print(f"   ⚠️  Description vide pour VLAN {vlan}")
+                continue
+
+            self.vlan_descriptions.append((vlan, description))
+            print(f"   ✅ VLAN {vlan}: {description[:50]}{'...' if len(description) > 50 else ''}")
+
+        print(f"\n📊 {len(self.vlan_descriptions)} entrée(s) à traiter")
+
+    def apply_vlan_descriptions(self):
+        """Applique les modifications de descriptions basées sur VLAN"""
+        if not self.vlan_descriptions:
+            return 0
+
+        print("\n" + "=" * 60)
+        print("📝 APPLICATION DES DESCRIPTIONS PAR VLAN")
+        print("=" * 60)
+
+        total_changes = 0
+
+        # Charger l'onglet vlan_pool_encap_block
+        if 'vlan_pool_encap_block' not in self.excel_data:
+            print("   ⚠️  Onglet vlan_pool_encap_block non trouvé")
+            return 0
+
+        vlan_df = self.excel_data['vlan_pool_encap_block']
+        vlan_columns = [str(c).lower() for c in vlan_df.columns]
+
+        # Trouver les colonnes block_start et block_end
+        start_col = None
+        end_col = None
+        desc_col = None
+
+        for col in ['block_start', 'from', 'start']:
+            if col in vlan_columns:
+                start_col = vlan_df.columns[vlan_columns.index(col)]
+                break
+
+        for col in ['block_end', 'to', 'end']:
+            if col in vlan_columns:
+                end_col = vlan_df.columns[vlan_columns.index(col)]
+                break
+
+        for col in ['description', 'descr']:
+            if col in vlan_columns:
+                desc_col = vlan_df.columns[vlan_columns.index(col)]
+                break
+
+        if not start_col or not end_col:
+            print("   ⚠️  Colonnes block_start/block_end non trouvées")
+            return 0
+
+        for vlan, description in self.vlan_descriptions:
+            print(f"\n   🔍 Traitement VLAN {vlan}...")
+
+            # Extraire le numéro de circuit (tout avant le premier _)
+            circuit = description.split('_')[0] if '_' in description else description
+            bd_name = f"{circuit}-BD"
+            epg_name = f"{circuit}-EPG"
+
+            print(f"      Circuit: {circuit} → BD: {bd_name}, EPG: {epg_name}")
+
+            # 1. Vérifier si VLAN est dans une plage et modifier vlan_pool_encap_block
+            vlan_found = False
+            for idx, row in vlan_df.iterrows():
+                try:
+                    start = int(row[start_col])
+                    end = int(row[end_col])
+                    if start <= vlan <= end:
+                        vlan_found = True
+                        if desc_col:
+                            vlan_df.at[idx, desc_col] = description
+                            print(f"      ✅ vlan_pool_encap_block: description mise à jour")
+                            total_changes += 1
+                        break
+                except (ValueError, TypeError):
+                    continue
+
+            if not vlan_found:
+                print(f"      ⚠️  VLAN {vlan} non trouvé dans les plages")
+                continue
+
+            # 2. Modifier la description dans l'onglet bd
+            if 'bd' in self.excel_data:
+                bd_df = self.excel_data['bd']
+                bd_columns = [str(c).lower() for c in bd_df.columns]
+
+                bd_col_name = None
+                bd_desc_col = None
+
+                for col in ['bd', 'name', 'bridge_domain']:
+                    if col in bd_columns:
+                        bd_col_name = bd_df.columns[bd_columns.index(col)]
+                        break
+
+                for col in ['description', 'descr']:
+                    if col in bd_columns:
+                        bd_desc_col = bd_df.columns[bd_columns.index(col)]
+                        break
+
+                if bd_col_name and bd_desc_col:
+                    mask = bd_df[bd_col_name] == bd_name
+                    if mask.any():
+                        bd_df.loc[mask, bd_desc_col] = description
+                        print(f"      ✅ bd: description mise à jour pour {bd_name}")
+                        total_changes += 1
+
+            # 3. Modifier la description dans l'onglet epg
+            if 'epg' in self.excel_data:
+                epg_df = self.excel_data['epg']
+                epg_columns = [str(c).lower() for c in epg_df.columns]
+
+                epg_col_name = None
+                epg_desc_col = None
+
+                for col in ['epg', 'name']:
+                    if col in epg_columns:
+                        epg_col_name = epg_df.columns[epg_columns.index(col)]
+                        break
+
+                for col in ['description', 'descr']:
+                    if col in epg_columns:
+                        epg_desc_col = epg_df.columns[epg_columns.index(col)]
+                        break
+
+                if epg_col_name and epg_desc_col:
+                    mask = epg_df[epg_col_name] == epg_name
+                    if mask.any():
+                        epg_df.loc[mask, epg_desc_col] = description
+                        print(f"      ✅ epg: description mise à jour pour {epg_name}")
+                        total_changes += 1
+
+            # 4. Modifier la description dans l'onglet bd_subnet
+            if 'bd_subnet' in self.excel_data:
+                subnet_df = self.excel_data['bd_subnet']
+                subnet_columns = [str(c).lower() for c in subnet_df.columns]
+
+                subnet_bd_col = None
+                subnet_desc_col = None
+
+                for col in ['bd', 'bridge_domain']:
+                    if col in subnet_columns:
+                        subnet_bd_col = subnet_df.columns[subnet_columns.index(col)]
+                        break
+
+                for col in ['description', 'descr']:
+                    if col in subnet_columns:
+                        subnet_desc_col = subnet_df.columns[subnet_columns.index(col)]
+                        break
+
+                if subnet_bd_col and subnet_desc_col:
+                    mask = subnet_df[subnet_bd_col] == bd_name
+                    if mask.any():
+                        subnet_df.loc[mask, subnet_desc_col] = description
+                        print(f"      ✅ bd_subnet: description mise à jour pour {bd_name}")
+                        total_changes += 1
+
+        print(f"\n📊 Total descriptions modifiées: {total_changes}")
+        return total_changes
+
+    def apply_bd_routing_disable(self):
+        """Désactive le routage pour tous les BD"""
+        if not self.disable_bd_routing:
+            return 0
+
+        if 'bd' not in self.excel_data:
+            print("   ⚠️  Onglet bd non trouvé")
+            return 0
+
+        bd_df = self.excel_data['bd']
+        columns = [str(c).lower() for c in bd_df.columns]
+
+        routing_col = None
+        for col in ['enable_routing', 'unicast_route', 'routing']:
+            if col in columns:
+                routing_col = bd_df.columns[columns.index(col)]
+                break
+
+        if not routing_col:
+            print("   ⚠️  Colonne enable_routing non trouvée dans l'onglet bd")
+            return 0
+
+        # Mettre toutes les valeurs à false
+        count = len(bd_df)
+        bd_df[routing_col] = 'false'
+
+        print(f"   ✅ Routage désactivé pour {count} Bridge Domain(s)")
+        return count
+
     def run(self):
         """Exécution principale"""
         # Charger le fichier Excel
@@ -678,6 +956,12 @@ class FabricConverter:
         if flt_sheets:
             self.collect_l3out_mappings('floating', 'flt')
 
+        # 5. Collecte option désactivation routage BD
+        self.collect_bd_routing_option()
+
+        # 6. Collecte des descriptions par VLAN
+        self.collect_vlan_descriptions()
+
         # Afficher le résumé
         self.show_summary()
 
@@ -694,6 +978,16 @@ class FabricConverter:
 
         # Appliquer les conversions
         self.apply_conversions()
+
+        # Appliquer les options supplémentaires
+        if self.disable_bd_routing:
+            print("\n" + "=" * 60)
+            print("🔀 DÉSACTIVATION DU ROUTAGE BD")
+            print("=" * 60)
+            self.apply_bd_routing_disable()
+
+        if self.vlan_descriptions:
+            self.apply_vlan_descriptions()
 
         # Sauvegarder
         self.save_excel()
