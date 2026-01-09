@@ -41,6 +41,7 @@ class EPGMigrationExtractor:
         # Collections d'objets trouvés - EPG (avec leurs données complètes)
         self.found_epgs = []
         self.found_bds = []
+        self.found_bd_subnets = []
         self.found_domains = []
         self.found_vlan_pools = []
         self.found_encap_blocks = []
@@ -1395,11 +1396,10 @@ class EPGMigrationExtractor:
                         })
 
         # ====================================================================
-        # EXTRACTION BD→L3Out (INDÉPENDANT de l'extraction L3Out)
+        # EXTRACTION BD→L3Out et BD Subnets (INDÉPENDANT de l'extraction L3Out)
         # ====================================================================
-        # Extraction de TOUTES les relations BD→L3Out pour les BDs extraits
-        # Sans filtrage par L3Out - peut inclure des L3Outs non extraits
-        print("\n🔍 Extraction des relations BD→L3Out...")
+        # Extraction de TOUTES les relations BD→L3Out et Subnets pour les BDs extraits
+        print("\n🔍 Extraction des relations BD→L3Out et BD Subnets...")
 
         # Get list of extracted BD names (tenant/bd pairs)
         extracted_bd_keys = set()
@@ -1407,8 +1407,9 @@ class EPGMigrationExtractor:
             bd_key = f"{bd['tenant']}/{bd['bd']}"
             extracted_bd_keys.add(bd_key)
 
-        # Clear existing bd_to_l3out
+        # Clear existing collections
         self.found_bd_to_l3out = []
+        self.found_bd_subnets = []
 
         # Find ALL BDs via fvTenant (supports empty DNs in backups)
         all_tenants = self.find_objects_recursive(self.aci_data, 'fvTenant')
@@ -1438,9 +1439,10 @@ class EPGMigrationExtractor:
                 if bd_key not in extracted_bd_keys:
                     continue
 
-                # Check BD children for L3Out relations
+                # Check BD children for L3Out relations and Subnets
                 bd_children = bd_obj.get('children', [])
                 for bd_child in bd_children:
+                    # Extract BD→L3Out relations
                     if 'fvRsBDToOut' in bd_child:
                         l3out_name_from_bd = bd_child['fvRsBDToOut']['attributes'].get('tnL3extOutName', '')
 
@@ -1455,7 +1457,33 @@ class EPGMigrationExtractor:
                             if bd_to_l3out_data not in self.found_bd_to_l3out:
                                 self.found_bd_to_l3out.append(bd_to_l3out_data)
 
+                    # Extract BD Subnets
+                    if 'fvSubnet' in bd_child:
+                        subnet_attr = bd_child['fvSubnet']['attributes']
+                        ip_with_mask = subnet_attr.get('ip', '')
+
+                        # Parser IP et mask (format: "10.1.1.1/24")
+                        if '/' in ip_with_mask:
+                            gateway, mask = ip_with_mask.split('/')
+                        else:
+                            gateway = ip_with_mask
+                            mask = '24'
+
+                        subnet_data = {
+                            'tenant': tenant_name,
+                            'bd': bd_name,
+                            'description': subnet_attr.get('descr', ''),
+                            'gateway': gateway,
+                            'mask': mask,
+                            'scope': subnet_attr.get('scope', 'private')
+                        }
+
+                        # Avoid duplicates
+                        if subnet_data not in self.found_bd_subnets:
+                            self.found_bd_subnets.append(subnet_data)
+
         print(f"   ✅ BD→L3Out: {len(self.found_bd_to_l3out)} relations trouvées")
+        print(f"   ✅ BD Subnets: {len(self.found_bd_subnets)} subnets trouvés")
 
         # Extraire les relations AEP→EPG directement depuis infraRsFuncToEpg
         # Ces objets contiennent les bindings statiques VLAN dans les AEPs
@@ -1630,6 +1658,7 @@ class EPGMigrationExtractor:
         # Afficher le résumé
         print(f"   ✅ EPG: {len(self.found_epgs)}")
         print(f"   ✅ Bridge Domains: {len(self.found_bds)}")
+        print(f"   ✅ BD Subnets: {len(self.found_bd_subnets)}")
         print(f"   ✅ Domains: {len(self.found_domains)}")
         print(f"   ✅ VLAN Pools: {len(self.found_vlan_pools)}")
         print(f"   ✅ Encap Blocks: {len(self.found_encap_blocks)}")
@@ -1653,6 +1682,7 @@ class EPGMigrationExtractor:
             # EPG objects
             'epg': self.found_epgs,
             'bd': self.found_bds,
+            'bd_subnet': self.found_bd_subnets,
             'epg_to_domain': self.found_epg_to_domain,
             'aep_to_epg': self.found_aep_to_epg,
 
