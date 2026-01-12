@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Script de conversion de fabric ACI - Version 3.
+Script de conversion de fabric ACI - Version 2.
 Convertit un fichier Excel d'une fabric source vers une fabric destination
 en modifiant les paramètres clés (tenant, VRF, AP, node_id, path, etc.)
 
-V3:
+V2:
 - Mapping automatique Tenant → VRF → AP (suffixes -TN, -VRF, -ANP)
 - Mappings L3Out unifiés (pas de distinction standard/floating)
-- Mappings Route Control (match_rule, route_control_profile, route_control_context)
 """
 
 import os
@@ -45,11 +44,6 @@ class FabricConverter:
         self.path_ep_mapping = {}
         self.local_as_mapping = {}
 
-        # Mappings Route Control
-        self.match_rule_mapping = {}
-        self.route_control_profile_mapping = {}
-        self.route_control_context_mapping = {}
-
         # Options supplémentaires
         self.disable_bd_routing = False
         self.vlan_descriptions = []  # Liste de tuples (vlan, description)
@@ -63,11 +57,6 @@ class FabricConverter:
         self.int_profile_columns = ['interface_profile', 'logical_interface_profile', 'interface_profile_name']
         self.path_ep_columns = ['path_ep', 'path', 'interface', 'tDn']
         self.local_as_columns = ['local_as', 'local_asn', 'asn', 'local_as_number']
-
-        # Colonnes Route Control
-        self.match_rule_columns = ['match_rule']
-        self.route_control_profile_columns = ['route_control_profile']
-        self.route_control_context_columns = ['route_control_context']
 
     def load_excel(self):
         """Charge le fichier Excel source"""
@@ -419,48 +408,6 @@ class FabricConverter:
                 dest = self.prompt_mapping("Local AS", las, las)
                 self.local_as_mapping[las] = dest
 
-    def collect_route_control_mappings(self):
-        """Collecte les mappings Route Control pour tous les onglets"""
-        print("\n" + "=" * 60)
-        print("🛣️  CONVERSIONS ROUTE CONTROL")
-        print("=" * 60)
-
-        # Match Rules
-        match_rules = self.find_all_values(self.match_rule_columns)
-        if match_rules:
-            print(f"\n{'─' * 60}")
-            print(f"📏 MATCH RULES")
-            print(f"{'─' * 60}")
-
-            for mr, contexts in sorted(match_rules.items()):
-                self.display_value_context_improved(mr, contexts)
-                dest = self.prompt_mapping("Match Rule", mr, mr)
-                self.match_rule_mapping[mr] = dest
-
-        # Route Control Profiles
-        rc_profiles = self.find_all_values(self.route_control_profile_columns)
-        if rc_profiles:
-            print(f"\n{'─' * 60}")
-            print(f"📋 ROUTE CONTROL PROFILES")
-            print(f"{'─' * 60}")
-
-            for rcp, contexts in sorted(rc_profiles.items()):
-                self.display_value_context_improved(rcp, contexts)
-                dest = self.prompt_mapping("Route Control Profile", rcp, rcp)
-                self.route_control_profile_mapping[rcp] = dest
-
-        # Route Control Contexts
-        rc_contexts = self.find_all_values(self.route_control_context_columns)
-        if rc_contexts:
-            print(f"\n{'─' * 60}")
-            print(f"🔀 ROUTE CONTROL CONTEXTS")
-            print(f"{'─' * 60}")
-
-            for rcc, contexts in sorted(rc_contexts.items()):
-                self.display_value_context_improved(rcc, contexts)
-                dest = self.prompt_mapping("Route Control Context", rcc, rcc)
-                self.route_control_context_mapping[rcc] = dest
-
     def apply_conversions(self):
         """Applique les conversions à tous les onglets"""
         print("\n" + "=" * 60)
@@ -597,45 +544,6 @@ class FabricConverter:
                                     df.loc[mask, real_col] = dest
                                 sheet_changes += count
 
-            # Conversion Match Rules (tous les onglets)
-            for col in self.match_rule_columns:
-                if col in columns:
-                    idx = columns.index(col)
-                    real_col = df.columns[idx]
-                    for src, dest in self.match_rule_mapping.items():
-                        if src != dest:
-                            mask = df[real_col] == src
-                            count = mask.sum()
-                            if count > 0:
-                                df.loc[mask, real_col] = dest
-                                sheet_changes += count
-
-            # Conversion Route Control Profiles (tous les onglets)
-            for col in self.route_control_profile_columns:
-                if col in columns:
-                    idx = columns.index(col)
-                    real_col = df.columns[idx]
-                    for src, dest in self.route_control_profile_mapping.items():
-                        if src != dest:
-                            mask = df[real_col] == src
-                            count = mask.sum()
-                            if count > 0:
-                                df.loc[mask, real_col] = dest
-                                sheet_changes += count
-
-            # Conversion Route Control Contexts (tous les onglets)
-            for col in self.route_control_context_columns:
-                if col in columns:
-                    idx = columns.index(col)
-                    real_col = df.columns[idx]
-                    for src, dest in self.route_control_context_mapping.items():
-                        if src != dest:
-                            mask = df[real_col] == src
-                            count = mask.sum()
-                            if count > 0:
-                                df.loc[mask, real_col] = dest
-                                sheet_changes += count
-
             if sheet_changes > 0:
                 print(f"   📝 {sheet_name}: {sheet_changes} modifications")
                 total_changes += sheet_changes
@@ -692,15 +600,6 @@ class FabricConverter:
         has_l3out |= show_mapping("Path EPs", self.path_ep_mapping, "   ")
         has_l3out |= show_mapping("Local AS", self.local_as_mapping, "   ")
         if not has_l3out:
-            print("   (aucun changement)")
-
-        # Route Control
-        print("\n🛣️  ROUTE CONTROL:")
-        has_rc = False
-        has_rc |= show_mapping("Match Rules", self.match_rule_mapping, "   ")
-        has_rc |= show_mapping("Route Control Profiles", self.route_control_profile_mapping, "   ")
-        has_rc |= show_mapping("Route Control Contexts", self.route_control_context_mapping, "   ")
-        if not has_rc:
             print("   (aucun changement)")
 
         # Options supplémentaires
@@ -1004,13 +903,10 @@ class FabricConverter:
         # 3. Collecte des mappings L3Out (UNIFIÉ - tous les onglets)
         self.collect_l3out_mappings()
 
-        # 4. Collecte des mappings Route Control
-        self.collect_route_control_mappings()
-
-        # 5. Collecte option désactivation routage BD
+        # 4. Collecte option désactivation routage BD
         self.collect_bd_routing_option()
 
-        # 6. Collecte des descriptions par VLAN
+        # 5. Collecte des descriptions par VLAN
         self.collect_vlan_descriptions()
 
         # Afficher le résumé
@@ -1053,12 +949,11 @@ class FabricConverter:
 
 def main():
     print("=" * 60)
-    print("🔄 FABRIC CONVERTER V3 - Migration ACI")
+    print("🔄 FABRIC CONVERTER V2 - Migration ACI")
     print("=" * 60)
     print("Convertit une configuration ACI d'une fabric vers une autre")
     print("• Mapping automatique Tenant → VRF → AP (suffixes -TN, -VRF, -ANP)")
-    print("• Mappings L3Out unifiés (pas de distinction standard/floating)")
-    print("• Mappings Route Control (match_rule, route_control_profile, route_control_context)\n")
+    print("• Mappings L3Out unifiés (pas de distinction standard/floating)\n")
 
     # Demander le fichier Excel source
     print("📁 Fichier Excel source: ", end="")
