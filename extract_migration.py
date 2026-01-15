@@ -914,10 +914,20 @@ class EPGMigrationExtractor:
                                             if tDn:
                                                 if '/phys-' in tDn:
                                                     domain = tDn.split('/phys-')[1] if '/phys-' in tDn else ''
-                                                    domain_type = 'physical'
+                                                    domain_type = 'phys'  # Use 'phys' to match other domain extractions
                                                 elif '/vmmp-' in tDn:
                                                     domain = tDn.split('/vmmp-')[1].split('/')[0] if '/vmmp-' in tDn else ''
                                                     domain_type = 'vmware'
+
+                                            # IMPORTANT: Add domain to found_domains for VLAN pool and AEP extraction
+                                            if domain:
+                                                domain_data = {
+                                                    'domain': domain,
+                                                    'description': '',
+                                                    'domain_type': domain_type
+                                                }
+                                                if domain_data not in self.found_domains:
+                                                    self.found_domains.append(domain_data)
 
                                             # First, collect all l3extMember to get node_id and encap info
                                             path_children = svi_child['l3extRsDynPathAtt'].get('children', [])
