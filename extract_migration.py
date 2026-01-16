@@ -910,21 +910,25 @@ class EPGMigrationExtractor:
 
                                             # Extract domain from tDn (e.g., "uni/phys-DOMAIN" → "DOMAIN")
                                             domain = ''
-                                            domain_type = 'physical'
+                                            domain_type = 'physical'  # For l3out_floating_svi_path CSV
+                                            domain_type_internal = 'phys'  # For found_domains (VLAN pool/AEP matching)
                                             if tDn:
                                                 if '/phys-' in tDn:
                                                     domain = tDn.split('/phys-')[1] if '/phys-' in tDn else ''
-                                                    domain_type = 'phys'  # Use 'phys' to match other domain extractions
+                                                    domain_type = 'physical'
+                                                    domain_type_internal = 'phys'
                                                 elif '/vmmp-' in tDn:
                                                     domain = tDn.split('/vmmp-')[1].split('/')[0] if '/vmmp-' in tDn else ''
                                                     domain_type = 'vmware'
+                                                    domain_type_internal = 'vmware'
 
                                             # IMPORTANT: Add domain to found_domains for VLAN pool and AEP extraction
+                                            # Use 'phys' for internal matching with infraRsVlanNs and infraRsDomP
                                             if domain:
                                                 domain_data = {
                                                     'domain': domain,
                                                     'description': '',
-                                                    'domain_type': domain_type
+                                                    'domain_type': domain_type_internal
                                                 }
                                                 if domain_data not in self.found_domains:
                                                     self.found_domains.append(domain_data)
