@@ -1747,22 +1747,23 @@ class EPGMigrationExtractor:
                     continue
 
                 # Parcourir les enfants du selector pour trouver:
-                # - infraPortBlk (port block)
+                # - infraPortBlk (port block) - peut y en avoir PLUSIEURS
                 # - infraRsAccBaseGrp (relation vers policy group)
                 selector_children = selector_obj.get('children', [])
 
-                port_blk_name = ''
-                from_port = ''
-                to_port = ''
+                # Collecter TOUS les port blocks
+                port_blocks = []
                 policy_group_name = ''
 
                 for sel_child in selector_children:
-                    # Port Block
+                    # Port Block - collecter tous les blocks
                     if 'infraPortBlk' in sel_child:
                         port_blk_attr = sel_child['infraPortBlk']['attributes']
-                        port_blk_name = port_blk_attr.get('name', '')
-                        from_port = port_blk_attr.get('fromPort', '')
-                        to_port = port_blk_attr.get('toPort', '')
+                        port_blocks.append({
+                            'name': port_blk_attr.get('name', ''),
+                            'from_port': port_blk_attr.get('fromPort', ''),
+                            'to_port': port_blk_attr.get('toPort', '')
+                        })
 
                     # Relation vers Policy Group
                     if 'infraRsAccBaseGrp' in sel_child:
@@ -1780,20 +1781,36 @@ class EPGMigrationExtractor:
                 if policy_group_name and policy_group_name in found_pg_names:
                     profile_has_matching_selector = True
 
-                    # Ajouter le selector
-                    selector_data = {
-                        'interface_profile': profile_name,
-                        'access_port_selector': selector_name,
-                        'port_blk': port_blk_name,
-                        'from_port': from_port,
-                        'to_port': to_port,
-                        'policy_group': policy_group_name,
-                        'description': selector_descr
-                    }
+                    # Ajouter une entrée par port block
+                    if port_blocks:
+                        for port_blk in port_blocks:
+                            selector_data = {
+                                'interface_profile': profile_name,
+                                'access_port_selector': selector_name,
+                                'port_blk': port_blk['name'],
+                                'from_port': port_blk['from_port'],
+                                'to_port': port_blk['to_port'],
+                                'policy_group': policy_group_name,
+                                'description': selector_descr
+                            }
 
-                    # Éviter les doublons
-                    if selector_data not in self.found_access_port_selectors:
-                        self.found_access_port_selectors.append(selector_data)
+                            # Éviter les doublons
+                            if selector_data not in self.found_access_port_selectors:
+                                self.found_access_port_selectors.append(selector_data)
+                    else:
+                        # Selector sans port block (cas rare mais possible)
+                        selector_data = {
+                            'interface_profile': profile_name,
+                            'access_port_selector': selector_name,
+                            'port_blk': '',
+                            'from_port': '',
+                            'to_port': '',
+                            'policy_group': policy_group_name,
+                            'description': selector_descr
+                        }
+
+                        if selector_data not in self.found_access_port_selectors:
+                            self.found_access_port_selectors.append(selector_data)
 
             # Si le profile a au moins un selector correspondant, l'ajouter
             if profile_has_matching_selector:
