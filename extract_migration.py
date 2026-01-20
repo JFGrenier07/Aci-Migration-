@@ -1820,12 +1820,28 @@ class EPGMigrationExtractor:
             os.remove(f)
 
         csv_data = {
-            # EPG objects
-            'epg': self.found_epgs,
+            # Infrastructure objects
+            'vlan_pool': self.found_vlan_pools,
+            'vlan_pool_encap_block': self.found_encap_blocks,
+            'domain': self.found_domains,
+            'domain_to_vlan_pool': self.found_domain_to_pool,
+            'aep': self.found_aeps,
+            'aep_to_domain': self.found_aep_to_domain,
+
+            # BD objects
             'bd': self.found_bds,
             'bd_subnet': self.found_bd_subnets,
+            'bd_to_l3out': self.found_bd_to_l3out,
+
+            # EPG objects
+            'epg': self.found_epgs,
             'epg_to_domain': self.found_epg_to_domain,
             'aep_to_epg': self.found_aep_to_epg,
+
+            # Interface Profiles & Selectors
+            'interface_policy_leaf_policy_gr': self.found_interface_policy_groups,
+            'interface_policy_leaf_profile': self.found_interface_profiles,
+            'access_port_to_int_policy_leaf': self.found_access_port_selectors,
 
             # L3Out objects
             'l3out': self.found_l3outs,
@@ -1833,37 +1849,23 @@ class EPGMigrationExtractor:
             'l3out_logical_node': self.found_l3out_nodes,
             'l3out_logical_interface_profile': self.found_l3out_int_profiles,
             'l3out_interface': self.found_l3out_interfaces,
-            'l3out_floating_svi': self.found_l3out_floating_svis,
-            'l3out_floating_svi_path': self.found_l3out_floating_svi_paths,
-            'l3out_floating_svi_secondary_ip': self.found_l3out_floating_svi_secondary_ips,
-            'l3out_floating_svi_path_sec': self.found_l3out_floating_svi_path_sec,
-            'l3out_logical_interface_vpc_mem': self.found_l3out_vpc_members,
-            'l3out_bgp_peer': self.found_l3out_bgp_peers,
-            'l3out_bgp_peer_floating': self.found_l3out_bgp_peers_floating,
             'l3out_bgp_protocol_profile': self.found_l3out_bgp_protocol_profiles,
+            'l3out_bgp_peer': self.found_l3out_bgp_peers,
             'l3out_extepg': self.found_l3out_extepgs,
             'l3out_extsubnet': self.found_l3out_extsubnets,
             'l3out_extepg_to_contract': self.found_l3out_extepg_to_contract,
-            'bd_to_l3out': self.found_bd_to_l3out,
+            'l3out_floating_svi': self.found_l3out_floating_svis,
+            'l3out_floating_svi_path': self.found_l3out_floating_svi_paths,
+            'l3out_floating_svi_secondary_ip': self.found_l3out_floating_svi_secondary_ips,
+            'l3out_logical_interface_vpc_mem': self.found_l3out_vpc_members,
+            'l3out_floating_svi_path_sec': self.found_l3out_floating_svi_path_sec,
+            'l3out_bgp_peer_floating': self.found_l3out_bgp_peers_floating,
 
             # Route Control objects
             'match_rule': self.found_match_rules,
             'match_route_destination': self.found_match_route_dests,
             'route_control_profile': self.found_route_control_profiles,
-            'route_control_context': self.found_route_control_contexts,
-
-            # Infrastructure objects (shared by EPG and L3Out)
-            'domain': self.found_domains,
-            'vlan_pool': self.found_vlan_pools,
-            'vlan_pool_encap_block': self.found_encap_blocks,
-            'aep': self.found_aeps,
-            'interface_policy_leaf_policy_gr': self.found_interface_policy_groups,
-            'domain_to_vlan_pool': self.found_domain_to_pool,
-            'aep_to_domain': self.found_aep_to_domain,
-
-            # Interface Profiles & Selectors
-            'interface_policy_leaf_profile': self.found_interface_profiles,
-            'access_port_to_int_policy_leaf': self.found_access_port_selectors
+            'route_control_context': self.found_route_control_contexts
         }
 
         total_rows = 0
