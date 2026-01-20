@@ -1128,19 +1128,36 @@ class FabricConverter:
                 })
 
         # 6. Créer le DataFrame et l'ajouter à l'Excel
+        print(f"\n   DEBUG: {len(interface_mappings)} interfaces à créer")
+
         if interface_mappings:
             interface_config_df = pd.DataFrame(interface_mappings)
             columns_order = ['node', 'interface', 'policy_group', 'role', 'port_type',
                            'interface_type', 'admin_state', 'description']
             interface_config_df = interface_config_df[columns_order]
+
+            # Ajouter le nouvel onglet interface_config
             self.excel_data['interface_config'] = interface_config_df
+            print(f"   DEBUG: interface_config ajouté à excel_data")
+
+            # Supprimer les onglets sources
+            if 'interface_policy_leaf_profile' in self.excel_data:
+                del self.excel_data['interface_policy_leaf_profile']
+                print(f"   DEBUG: interface_policy_leaf_profile supprimé")
+
+            if 'access_port_to_int_policy_leaf' in self.excel_data:
+                del self.excel_data['access_port_to_int_policy_leaf']
+                print(f"   DEBUG: access_port_to_int_policy_leaf supprimé")
 
             print("\n" + "=" * 60)
             print("✅ INTERFACE_CONFIG GÉNÉRÉ")
             print("=" * 60)
             print(f"   • Lignes créées: {len(interface_mappings)}")
+            print(f"   • Onglets sources supprimés: interface_policy_leaf_profile, access_port_to_int_policy_leaf")
             print(f"\n   Aperçu:")
             print(interface_config_df.to_string(index=False, max_rows=10))
+        else:
+            print("   ⚠️  Aucune interface à créer - vérifiez les mappings")
 
     def run(self):
         """Exécution principale"""
