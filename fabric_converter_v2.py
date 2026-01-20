@@ -1039,14 +1039,20 @@ class FabricConverter:
         print("🔄 MAPPING DES INTERFACES PAR POLICY GROUP")
         print("-" * 60)
 
+        # Debug: afficher les données brutes
+        print(f"\n   DEBUG: {len(access_port_df)} lignes dans access_port_to_int_policy_leaf")
+        print(f"   DEBUG: Colonnes: {list(access_port_df.columns)}")
+        print(f"   DEBUG: Profiles mappés: {list(profile_to_node.keys())}")
+
         # Créer un dictionnaire pour regrouper
         grouped = {}
-        for _, row in access_port_df.iterrows():
-            profile = row.get('interface_profile', '')
-            policy_group = row.get('policy_group', '')
-            from_port = row.get('from_port', '')
-            to_port = row.get('to_port', '')
-            description = row.get('description', '')
+        for idx, row in access_port_df.iterrows():
+            # Accès sécurisé aux colonnes avec gestion des NaN
+            profile = str(row['interface_profile']) if pd.notna(row['interface_profile']) else ''
+            policy_group = str(row['policy_group']) if pd.notna(row['policy_group']) else ''
+            from_port = row['from_port'] if pd.notna(row['from_port']) else ''
+            to_port = row['to_port'] if pd.notna(row['to_port']) else ''
+            description = str(row['description']) if pd.notna(row['description']) else ''
 
             if not profile or not policy_group:
                 continue
@@ -1064,14 +1070,23 @@ class FabricConverter:
 
             # Ajouter les interfaces (gérer les ranges)
             try:
-                from_p = int(from_port)
-                to_p = int(to_port)
+                from_p = int(float(from_port))
+                to_p = int(float(to_port))
                 for port in range(from_p, to_p + 1):
                     interface = f"1/{port}"
                     if interface not in grouped[key]['interfaces']:
                         grouped[key]['interfaces'].append(interface)
             except (ValueError, TypeError):
-                pass
+                print(f"   ⚠️  Impossible de parser ports: {from_port} - {to_port}")
+
+        # Debug: afficher les groupes trouvés
+        print(f"\n   DEBUG: {len(grouped)} groupes (profile, policy_group) trouvés")
+        for key, data in grouped.items():
+            print(f"   DEBUG: {key} → {len(data['interfaces'])} interfaces: {data['interfaces']}")
+
+        if not grouped:
+            print("\n❌ Aucun groupe trouvé! Vérifiez que les interface_profile correspondent.")
+            return False
 
         # 5. Pour chaque groupe, demander les nouvelles interfaces
         interface_mappings = []
