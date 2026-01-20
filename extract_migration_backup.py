@@ -75,10 +75,6 @@ class EPGMigrationExtractor:
         self.found_route_control_profiles = []
         self.found_route_control_contexts = []
 
-        # Collections d'objets trouvés - Interface Profiles & Selectors
-        self.found_interface_profiles = []
-        self.found_access_port_selectors = []
-
     def load_extraction_list(self):
         """Charge la liste d'extraction (EPG + L3Out) depuis le fichier YAML"""
         print("\n📋 Chargement de la liste d'extraction...")
@@ -1687,129 +1683,6 @@ class EPGMigrationExtractor:
         print(f"   ✅ AEP→Domain: {len(self.found_aep_to_domain)}")
         print(f"   ✅ AEP→EPG: {len(self.found_aep_to_epg)}")
 
-        # Extraire les Interface Profiles et Selectors liés aux Policy Groups trouvés
-        self.extract_interface_profiles_from_policy_groups()
-
-        print(f"   ✅ Interface Profiles: {len(self.found_interface_profiles)}")
-        print(f"   ✅ Access Port Selectors: {len(self.found_access_port_selectors)}")
-
-    def extract_interface_profiles_from_policy_groups(self):
-        """Extrait les Interface Profiles et Selectors liés aux Policy Groups trouvés"""
-        print("\n🔍 Extraction des Interface Profiles et Selectors...")
-
-        # Obtenir la liste des noms de policy groups trouvés
-        found_pg_names = set()
-        for pg in self.found_interface_policy_groups:
-            pg_name = pg.get('policy_group', '')
-            if pg_name:
-                found_pg_names.add(pg_name)
-
-        if not found_pg_names:
-            print("   ⚠️  Aucun Policy Group trouvé - pas d'Interface Profile à extraire")
-            return
-
-        print(f"   📋 Policy Groups à rechercher: {len(found_pg_names)}")
-
-        # Chercher tous les Interface Profiles (infraAccPortP)
-        all_interface_profiles = self.find_objects_recursive(self.aci_data, 'infraAccPortP')
-        print(f"   📂 Interface Profiles trouvés dans la config: {len(all_interface_profiles)}")
-
-        # Pour chaque Interface Profile
-        for profile_obj in all_interface_profiles:
-            profile_attr = profile_obj.get('attributes', {})
-            profile_name = profile_attr.get('name', '')
-            profile_dn = profile_attr.get('dn', '')
-            profile_descr = profile_attr.get('descr', '')
-
-            if not profile_name:
-                continue
-
-            # Déterminer le type (leaf ou fex)
-            profile_type = 'leaf'
-            if '/fexprof-' in profile_dn or 'fex' in profile_name.lower():
-                profile_type = 'fex'
-
-            # Parcourir les enfants pour trouver les selectors (infraHPortS)
-            profile_children = profile_obj.get('children', [])
-            profile_has_matching_selector = False
-
-            for child in profile_children:
-                if 'infraHPortS' not in child:
-                    continue
-
-                selector_obj = child['infraHPortS']
-                selector_attr = selector_obj.get('attributes', {})
-                selector_name = selector_attr.get('name', '')
-                selector_descr = selector_attr.get('descr', '')
-                selector_type = selector_attr.get('type', 'range')
-
-                if not selector_name:
-                    continue
-
-                # Parcourir les enfants du selector pour trouver:
-                # - infraPortBlk (port block)
-                # - infraRsAccBaseGrp (relation vers policy group)
-                selector_children = selector_obj.get('children', [])
-
-                port_blk_name = ''
-                from_port = ''
-                to_port = ''
-                policy_group_name = ''
-
-                for sel_child in selector_children:
-                    # Port Block
-                    if 'infraPortBlk' in sel_child:
-                        port_blk_attr = sel_child['infraPortBlk']['attributes']
-                        port_blk_name = port_blk_attr.get('name', '')
-                        from_port = port_blk_attr.get('fromPort', '')
-                        to_port = port_blk_attr.get('toPort', '')
-
-                    # Relation vers Policy Group
-                    if 'infraRsAccBaseGrp' in sel_child:
-                        rs_attr = sel_child['infraRsAccBaseGrp']['attributes']
-                        tDn = rs_attr.get('tDn', '')
-                        # Extraire le nom du policy group depuis le tDn
-                        # Format: uni/infra/funcprof/accportgrp-{name}
-                        # ou: uni/infra/funcprof/accbundle-{name}
-                        if '/accportgrp-' in tDn:
-                            policy_group_name = tDn.split('/accportgrp-')[-1]
-                        elif '/accbundle-' in tDn:
-                            policy_group_name = tDn.split('/accbundle-')[-1]
-
-                # Vérifier si ce selector utilise un policy group qu'on recherche
-                if policy_group_name and policy_group_name in found_pg_names:
-                    profile_has_matching_selector = True
-
-                    # Ajouter le selector
-                    selector_data = {
-                        'interface_profile': profile_name,
-                        'access_port_selector': selector_name,
-                        'port_blk': port_blk_name,
-                        'from_port': from_port,
-                        'to_port': to_port,
-                        'policy_group': policy_group_name,
-                        'description': selector_descr
-                    }
-
-                    # Éviter les doublons
-                    if selector_data not in self.found_access_port_selectors:
-                        self.found_access_port_selectors.append(selector_data)
-
-            # Si le profile a au moins un selector correspondant, l'ajouter
-            if profile_has_matching_selector:
-                profile_data = {
-                    'interface_profile': profile_name,
-                    'description': profile_descr,
-                    'type': profile_type
-                }
-
-                # Éviter les doublons
-                if not any(p['interface_profile'] == profile_name for p in self.found_interface_profiles):
-                    self.found_interface_profiles.append(profile_data)
-
-        print(f"   ✅ Interface Profiles liés: {len(self.found_interface_profiles)}")
-        print(f"   ✅ Access Port Selectors liés: {len(self.found_access_port_selectors)}")
-
     def generate_csvs(self):
         """Génère les CSV"""
         print("\n📝 Génération des CSV...")
@@ -1859,11 +1732,7 @@ class EPGMigrationExtractor:
             'aep': self.found_aeps,
             'interface_policy_leaf_policy_gr': self.found_interface_policy_groups,
             'domain_to_vlan_pool': self.found_domain_to_pool,
-            'aep_to_domain': self.found_aep_to_domain,
-
-            # Interface Profiles & Selectors
-            'interface_policy_leaf_profile': self.found_interface_profiles,
-            'access_port_to_int_policy_leaf': self.found_access_port_selectors
+            'aep_to_domain': self.found_aep_to_domain
         }
 
         total_rows = 0
