@@ -112,14 +112,19 @@ class FabricConverter:
             parts.append(f"{hdr}={truncated}")
         return " | ".join(parts)
 
-    def find_all_values(self, column_list):
+    def find_all_values(self, column_list, exclude_sheets=None):
         """
         Trouve les valeurs uniques dans TOUS les onglets.
         Retourne un dict avec les valeurs et leur contexte.
+        exclude_sheets: liste d'onglets à exclure de la recherche
         """
         values_with_context = {}
+        exclude_sheets = exclude_sheets or []
 
         for sheet_name, df in self.excel_data.items():
+            # Ignorer les onglets exclus
+            if sheet_name in exclude_sheets:
+                continue
             columns_lower = [str(c).lower() for c in df.columns]
 
             for col_name in column_list:
@@ -383,8 +388,9 @@ class FabricConverter:
                 dest = self.prompt_mapping("Node Profile", np, np)
                 self.node_profile_mapping[np] = dest
 
-        # Interface Profiles
-        int_profiles = self.find_all_values(self.int_profile_columns)
+        # Interface Profiles (L3Out seulement - exclure les onglets Leaf Interface)
+        exclude_leaf_sheets = ['interface_policy_leaf_profile', 'access_port_to_int_policy_leaf']
+        int_profiles = self.find_all_values(self.int_profile_columns, exclude_sheets=exclude_leaf_sheets)
         if int_profiles:
             print(f"\n{'─' * 60}")
             print(f"🔌 INTERFACE PROFILES")
