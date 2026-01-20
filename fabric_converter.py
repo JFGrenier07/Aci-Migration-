@@ -977,6 +977,171 @@ class FabricConverter:
         print(f"   ✅ Routage désactivé pour {count} Bridge Domain(s)")
         return count
 
+    def collect_interface_config_mappings(self):
+        """Collecte les mappings pour convertir Interface Profile → Interface Config"""
+        print("\n" + "=" * 60)
+        print("🔌 CONVERSION INTERFACE PROFILE → INTERFACE CONFIG")
+        print("=" * 60)
+
+        # Vérifier que les onglets existent
+        if 'interface_policy_leaf_profile' not in self.excel_data:
+            print("   ⚠️  Onglet 'interface_policy_leaf_profile' non trouvé - étape ignorée")
+            return
+
+        if 'access_port_to_int_policy_leaf' not in self.excel_data:
+            print("   ⚠️  Onglet 'access_port_to_int_policy_leaf' non trouvé - étape ignorée")
+            return
+
+        # Demander si l'utilisateur veut faire cette conversion
+        print("\nVoulez-vous convertir les Interface Profiles vers interface_config? [o/N]: ", end="")
+        choice = input().strip().lower()
+        if choice not in ['o', 'oui', 'y', 'yes']:
+            print("   → Conversion interface_config ignorée")
+            return
+
+        profile_df = self.excel_data['interface_policy_leaf_profile']
+        access_port_df = self.excel_data['access_port_to_int_policy_leaf']
+
+        # 1. Extraire les interface_profile uniques
+        interface_profiles = profile_df['interface_profile'].dropna().unique().tolist()
+        print(f"\n📋 Interface Profiles trouvés: {len(interface_profiles)}")
+        for ip in interface_profiles:
+            print(f"   • {ip}")
+
+        # 2. Mapping Interface Profile → Node ID
+        print("\n" + "-" * 60)
+        print("📍 MAPPING INTERFACE PROFILE → NODE ID")
+        print("-" * 60)
+        profile_to_node = {}
+        for profile in interface_profiles:
+            print(f"\n'{profile}' → Entrez le Node ID: ", end="")
+            node_id = input().strip()
+            if node_id:
+                profile_to_node[profile] = node_id
+            else:
+                print(f"   ⚠️  Node ID vide, ce profile sera ignoré")
+
+        if not profile_to_node:
+            print("❌ Aucun mapping défini, conversion ignorée")
+            return
+
+        # 3. Demander le type d'interface
+        print("\n" + "-" * 60)
+        print("🔧 TYPE D'INTERFACE")
+        print("-" * 60)
+        print("[1] Access (switch_port) - DÉFAUT")
+        print("[2] PC/VPC (pc_or_vpc)")
+        print("\nChoix [1]: ", end="")
+        type_choice = input().strip()
+
+        if type_choice == '2':
+            interface_type = 'pc_or_vpc'
+            print("   → Type sélectionné: pc_or_vpc")
+        else:
+            interface_type = 'switch_port'
+            print("   → Type sélectionné: switch_port")
+
+        # 4. Regrouper les interfaces par (interface_profile, policy_group)
+        print("\n" + "-" * 60)
+        print("🔄 MAPPING DES INTERFACES PAR POLICY GROUP")
+        print("-" * 60)
+
+        grouped = {}
+        for idx, row in access_port_df.iterrows():
+            profile = str(row['interface_profile']) if pd.notna(row['interface_profile']) else ''
+            policy_group = str(row['policy_group']) if pd.notna(row['policy_group']) else ''
+            from_port = row['from_port'] if pd.notna(row['from_port']) else ''
+            to_port = row['to_port'] if pd.notna(row['to_port']) else ''
+            description = str(row['description']) if pd.notna(row['description']) else ''
+
+            if not profile or not policy_group:
+                continue
+
+            if profile not in profile_to_node:
+                continue
+
+            key = (profile, policy_group)
+            if key not in grouped:
+                grouped[key] = {
+                    'interfaces': [],
+                    'description': description
+                }
+
+            try:
+                from_p = int(float(from_port))
+                to_p = int(float(to_port))
+                for port in range(from_p, to_p + 1):
+                    interface = f"1/{port}"
+                    if interface not in grouped[key]['interfaces']:
+                        grouped[key]['interfaces'].append(interface)
+            except (ValueError, TypeError):
+                pass
+
+        if not grouped:
+            print("\n❌ Aucun groupe trouvé!")
+            return
+
+        # 5. Pour chaque groupe, demander les nouvelles interfaces
+        interface_mappings = []
+
+        for (profile, policy_group), data in grouped.items():
+            node_id = profile_to_node[profile]
+            interfaces = data['interfaces']
+            description = data['description']
+
+            print(f"\n{'='*60}")
+            print(f"📌 Interface Profile: {profile}")
+            print(f"   Policy Group: {policy_group}")
+            print(f"   Node destination: {node_id}")
+            print(f"\n   Interfaces actuelles:")
+            for iface in sorted(interfaces, key=lambda x: int(x.split('/')[1]) if '/' in x else 0):
+                print(f"      • {iface}")
+
+            print(f"\n   Entrez les nouvelles interfaces (séparées par virgule)")
+            print(f"   Format: 1/1, 1/2, 1/3 ou eth1/1, eth1/2")
+            print(f"   [Entrée vide = garder les mêmes interfaces]")
+            print(f"\n   → ", end="")
+
+            new_interfaces_input = input().strip()
+
+            if new_interfaces_input:
+                new_interfaces = []
+                for iface in new_interfaces_input.split(','):
+                    iface = iface.strip()
+                    if iface.lower().startswith('eth'):
+                        iface = iface[3:]
+                    if iface:
+                        new_interfaces.append(iface)
+            else:
+                new_interfaces = interfaces
+
+            for iface in new_interfaces:
+                interface_mappings.append({
+                    'node': node_id,
+                    'interface': iface,
+                    'policy_group': policy_group,
+                    'role': 'leaf',
+                    'port_type': 'access',
+                    'interface_type': interface_type,
+                    'admin_state': 'up',
+                    'description': description
+                })
+
+        # 6. Créer le DataFrame et l'ajouter à l'Excel
+        if interface_mappings:
+            interface_config_df = pd.DataFrame(interface_mappings)
+            columns_order = ['node', 'interface', 'policy_group', 'role', 'port_type',
+                           'interface_type', 'admin_state', 'description']
+            interface_config_df = interface_config_df[columns_order]
+            self.excel_data['interface_config'] = interface_config_df
+
+            print("\n" + "=" * 60)
+            print("✅ INTERFACE_CONFIG GÉNÉRÉ")
+            print("=" * 60)
+            print(f"   • Lignes créées: {len(interface_mappings)}")
+            print(f"\n   Aperçu:")
+            print(interface_config_df.to_string(index=False, max_rows=10))
+
     def run(self):
         """Exécution principale"""
         # Charger le fichier Excel
@@ -1012,6 +1177,9 @@ class FabricConverter:
 
         # 6. Collecte des descriptions par VLAN
         self.collect_vlan_descriptions()
+
+        # 7. Collecte des mappings Interface Profile → Interface Config
+        self.collect_interface_config_mappings()
 
         # Afficher le résumé
         self.show_summary()
