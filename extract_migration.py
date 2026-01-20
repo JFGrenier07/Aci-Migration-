@@ -1885,12 +1885,28 @@ class EPGMigrationExtractor:
         """Génère le fichier Excel"""
         print(f"\n📊 Génération de l'Excel: {self.output_excel}")
 
+        # Ordre des onglets (même ordre que csv_data)
+        sheet_order = [
+            'vlan_pool', 'vlan_pool_encap_block', 'domain', 'domain_to_vlan_pool',
+            'aep', 'aep_to_domain',
+            'bd', 'bd_subnet', 'bd_to_l3out',
+            'epg', 'epg_to_domain', 'aep_to_epg',
+            'interface_policy_leaf_policy_gr', 'interface_policy_leaf_profile', 'access_port_to_int_policy_leaf',
+            'l3out', 'l3out_logical_node_profile', 'l3out_logical_node',
+            'l3out_logical_interface_profile', 'l3out_interface',
+            'l3out_bgp_protocol_profile', 'l3out_bgp_peer',
+            'l3out_extepg', 'l3out_extsubnet', 'l3out_extepg_to_contract',
+            'l3out_floating_svi', 'l3out_floating_svi_path', 'l3out_floating_svi_secondary_ip',
+            'l3out_logical_interface_vpc_mem', 'l3out_floating_svi_path_sec', 'l3out_bgp_peer_floating',
+            'match_rule', 'match_route_destination', 'route_control_profile', 'route_control_context'
+        ]
+
         # Vérifier s'il y a des données à exporter
-        csv_files = sorted([f for f in os.listdir(self.csv_dir) if f.endswith('.csv')])
+        csv_files_exist = [f for f in os.listdir(self.csv_dir) if f.endswith('.csv')]
         has_data = False
 
         # Vérifier si au moins un CSV contient des données
-        for csv_file in csv_files:
+        for csv_file in csv_files_exist:
             csv_path = os.path.join(self.csv_dir, csv_file)
             try:
                 df = pd.read_csv(csv_path)
@@ -1907,9 +1923,9 @@ class EPGMigrationExtractor:
 
         sheets_written = 0
         with pd.ExcelWriter(self.output_excel, engine='openpyxl') as writer:
-            for csv_file in csv_files:
-                sheet_name = csv_file.replace('.csv', '')
-                csv_path = os.path.join(self.csv_dir, csv_file)
+            # Utiliser l'ordre défini
+            for sheet_name in sheet_order:
+                csv_path = os.path.join(self.csv_dir, f"{sheet_name}.csv")
 
                 try:
                     df = pd.read_csv(csv_path)
