@@ -1171,15 +1171,23 @@ class FabricConverter:
                     print("\n   Format attendu par ligne:")
                     print("   {NOM_LEAF} {ESPACE(S)} {NO_INTERFACE} {ESPACE(S)} {DESCRIPTION}")
                     print("   Exemple: SF22-127  3  VPZESX1011-onb2-p1-vmnic2")
-                    print("\n   Collez votre liste (terminez par une ligne vide):")
+                    print("\n   Collez votre liste puis appuyez 2 fois sur Entrée pour terminer:")
                     print("-" * 60)
 
                     description_lines = []
+                    empty_line_count = 0
                     while True:
-                        line = input()
-                        if not line.strip():
+                        try:
+                            line = input()
+                            if not line.strip():
+                                empty_line_count += 1
+                                if empty_line_count >= 2:
+                                    break
+                            else:
+                                empty_line_count = 0
+                                description_lines.append(line.strip())
+                        except EOFError:
                             break
-                        description_lines.append(line.strip())
 
                     print(f"\n   ✅ {len(description_lines)} lignes de description reçues")
 
