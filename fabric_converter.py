@@ -1056,6 +1056,7 @@ class FabricConverter:
         for idx, row in access_port_df.iterrows():
             profile = str(row['interface_profile']) if pd.notna(row['interface_profile']) else ''
             policy_group = str(row['policy_group']) if pd.notna(row['policy_group']) else ''
+            access_port_selector = str(row['access_port_selector']) if pd.notna(row['access_port_selector']) else ''
             from_port = row['from_port'] if pd.notna(row['from_port']) else ''
             to_port = row['to_port'] if pd.notna(row['to_port']) else ''
             description = str(row['description']) if pd.notna(row['description']) else ''
@@ -1070,6 +1071,7 @@ class FabricConverter:
             if key not in grouped:
                 grouped[key] = {
                     'interfaces': [],
+                    'access_port_selector': access_port_selector,
                     'description': description
                 }
 
@@ -1093,10 +1095,12 @@ class FabricConverter:
         for (profile, policy_group), data in grouped.items():
             node_id = profile_to_node[profile]
             interfaces = data['interfaces']
+            access_port_selector = data['access_port_selector']
             description = data['description']
 
             print(f"\n{'='*60}")
             print(f"📌 Interface Profile: {profile}")
+            print(f"   Access Port Selector: {access_port_selector}")
             print(f"   Policy Group: {policy_group}")
             print(f"   Node destination: {node_id}")
             print(f"\n   Interfaces actuelles:")
@@ -1133,7 +1137,100 @@ class FabricConverter:
                     'description': description
                 })
 
-        # 6. Créer le DataFrame et l'ajouter à l'Excel
+        # 6. Mapping des descriptions personnalisées
+        if interface_mappings:
+            print("\n" + "=" * 60)
+            print("📝 MAPPING DES DESCRIPTIONS")
+            print("=" * 60)
+            print("\nVoulez-vous ajouter des descriptions personnalisées? [o/N]: ", end="")
+            desc_choice = input().strip().lower()
+
+            if desc_choice in ['o', 'oui', 'y', 'yes']:
+                # 6a. Mapping Node ID → Nom de Leaf
+                print("\n" + "-" * 60)
+                print("🏷️  MAPPING NODE ID → NOM DE LEAF")
+                print("-" * 60)
+
+                # Obtenir les node_id uniques
+                unique_nodes = list(set([m['node'] for m in interface_mappings]))
+                node_to_leaf = {}
+
+                for node in sorted(unique_nodes):
+                    print(f"\n   Node '{node}' → Nom de Leaf (ex: SF22-127): ", end="")
+                    leaf_name = input().strip().upper()
+                    if leaf_name:
+                        node_to_leaf[node] = leaf_name
+                    else:
+                        print(f"      ⚠️  Nom vide, ce node sera ignoré pour les descriptions")
+
+                if node_to_leaf:
+                    # 6b. Demander la liste de descriptions
+                    print("\n" + "-" * 60)
+                    print("📋 LISTE DES DESCRIPTIONS")
+                    print("-" * 60)
+                    print("\n   Format attendu par ligne:")
+                    print("   {NOM_LEAF} {ESPACE(S)} {NO_INTERFACE} {ESPACE(S)} {DESCRIPTION}")
+                    print("   Exemple: SF22-127  3  VPZESX1011-onb2-p1-vmnic2")
+                    print("\n   Collez votre liste (terminez par une ligne vide):")
+                    print("-" * 60)
+
+                    description_lines = []
+                    while True:
+                        line = input()
+                        if not line.strip():
+                            break
+                        description_lines.append(line.strip())
+
+                    print(f"\n   ✅ {len(description_lines)} lignes de description reçues")
+
+                    # 6c. Parser et associer les descriptions
+                    descriptions_map = {}  # (node, interface) → description formatée
+
+                    for line in description_lines:
+                        # Parser: LEAF  INTERFACE  DESCRIPTION
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            leaf = parts[0].upper()
+                            try:
+                                iface_num = int(parts[1])
+                                iface = f"1/{iface_num}"
+                            except ValueError:
+                                continue
+
+                            # Trouver le node_id correspondant au leaf
+                            node_for_leaf = None
+                            for node, leaf_name in node_to_leaf.items():
+                                if leaf_name == leaf:
+                                    node_for_leaf = node
+                                    break
+
+                            if node_for_leaf:
+                                # Description = tout après le numéro d'interface
+                                desc_text = ' '.join(parts[2:]).upper()
+
+                                # Formater: (T:SRV E:{AVANT-TIRET} I:{APRÈS-TIRET})
+                                if '-' in desc_text:
+                                    first_dash = desc_text.index('-')
+                                    e_part = desc_text[:first_dash]
+                                    i_part = desc_text[first_dash+1:]
+                                else:
+                                    e_part = desc_text
+                                    i_part = ''
+
+                                formatted_desc = f"(T:SRV E:{e_part} I:{i_part})"
+                                descriptions_map[(node_for_leaf, iface)] = formatted_desc
+
+                    # 6d. Appliquer les descriptions aux interfaces
+                    updated_count = 0
+                    for mapping in interface_mappings:
+                        key = (mapping['node'], mapping['interface'])
+                        if key in descriptions_map:
+                            mapping['description'] = descriptions_map[key]
+                            updated_count += 1
+
+                    print(f"\n   ✅ {updated_count} descriptions mises à jour")
+
+        # 7. Créer le DataFrame et l'ajouter à l'Excel
         print(f"\n   DEBUG: {len(interface_mappings)} interfaces à créer")
 
         if interface_mappings:
