@@ -60,6 +60,8 @@ class FabricConverter:
         self.interface_config_type = 'switch_port'
         self.interface_config_profile_to_node = {}
         self.interface_config_mappings = []
+        self.interface_config_node_to_leaf = {}
+        self.interface_config_descriptions_raw = []
 
         # Colonnes a convertir par type
         self.tenant_columns = ['tenant']
@@ -996,18 +998,21 @@ class FabricConverter:
                                 df.loc[mask, real_col] = dest
                                 sheet_changes += count
 
-            # Conversion Path EPs (tous les onglets)
-            for col in self.path_ep_columns:
-                if col in columns:
-                    idx = columns.index(col)
-                    real_col = df.columns[idx]
-                    for src, dest in self.path_ep_mapping.items():
-                        if src != dest:
-                            mask = df[real_col] == src
-                            count = mask.sum()
-                            if count > 0:
-                                df.loc[mask, real_col] = dest
-                                sheet_changes += count
+            # Conversion Path EPs (tous les onglets, SAUF interface_config)
+            # Bug fix: 'interface' dans path_ep_columns match la colonne
+            # 'interface' de interface_config et corrompait les donnees
+            if sheet_name != 'interface_config':
+                for col in self.path_ep_columns:
+                    if col in columns:
+                        idx = columns.index(col)
+                        real_col = df.columns[idx]
+                        for src, dest in self.path_ep_mapping.items():
+                            if src != dest:
+                                mask = df[real_col] == src
+                                count = mask.sum()
+                                if count > 0:
+                                    df.loc[mask, real_col] = dest
+                                    sheet_changes += count
 
             # Conversion Local AS (tous les onglets)
             for col in self.local_as_columns:
@@ -1328,6 +1333,12 @@ class FabricConverter:
         else:
             print("    Descriptions VLAN: pas de modification")
 
+        if self.interface_config_enabled:
+            print(f"    Interface config: active ({self.interface_config_type})")
+            print(f"      Profiles -> Node: {len(self.interface_config_profile_to_node)} mapping(s)")
+            if self.interface_config_descriptions_raw:
+                print(f"      Descriptions raw: {len(self.interface_config_descriptions_raw)} ligne(s)")
+
     # =========================================================================
     # WIZARD MODE
     # =========================================================================
@@ -1575,26 +1586,96 @@ class FabricConverter:
 
         # --- DESCRIPTIONS VLAN ---
         lines.append("# --- DESCRIPTIONS VLAN ---")
-        lines.append("# Format: vlan,description")
-        lines.append("# Exemple: 200,RL00001_10.1.1.1/24_Serveur_Web")
+        lines.append("# Collez vos lignes au format: VLAN,DESCRIPTION")
+        lines.append("# Le circuit est extrait du debut de la description (avant le premier _)")
+        lines.append("# et sert a trouver les BD/EPG correspondants (ex: RL00001 -> RL00001-BD, RL00001-EPG)")
+        lines.append("# Exemple:")
+        lines.append("#   - \"200,RL00001_10.1.1.1/24_Serveur_Web\"")
+        lines.append("#   - \"201,RL00002_10.1.2.1/24_Database\"")
         lines.append("vlan_descriptions: []")
 
         lines.append("")
 
         # --- INTERFACE CONFIG ---
+        # Decouvrir les interface profiles et access_port depuis l'Excel
+        iface_profiles_found = []
+        iface_access_data = []
+        if 'interface_policy_leaf_profile' in self.excel_data:
+            iface_profiles_found = self.excel_data['interface_policy_leaf_profile']['interface_profile'].dropna().unique().tolist()
+        if 'access_port_to_int_policy_leaf' in self.excel_data:
+            adf = self.excel_data['access_port_to_int_policy_leaf']
+            for _, row in adf.iterrows():
+                profile = str(row.get('interface_profile', '')) if pd.notna(row.get('interface_profile', None)) else ''
+                pg = str(row.get('policy_group', '')) if pd.notna(row.get('policy_group', None)) else ''
+                fp = row.get('from_port', '')
+                tp = row.get('to_port', '')
+                desc = str(row.get('description', '')) if pd.notna(row.get('description', None)) else ''
+                if profile and pg:
+                    iface_access_data.append({'profile': profile, 'policy_group': pg,
+                                             'from_port': fp, 'to_port': tp, 'description': desc})
+
         lines.append("# --- INTERFACE CONFIG ---")
         lines.append("# Conversion Interface Profile -> interface_config")
+        lines.append("# Meme fonctionnalite que le wizard: genere un onglet interface_config")
+        lines.append("# et supprime les onglets sources (interface_policy_leaf_profile,")
+        lines.append("# access_port_to_int_policy_leaf)")
         lines.append("interface_config:")
         lines.append("  enabled: false")
         lines.append('  interface_type: "switch_port"   # "switch_port" ou "pc_or_vpc"')
+
+        # Profile to node - pre-remplir avec les profiles trouves
         lines.append("  profile_to_node:")
-        lines.append("    # - profile: \"Interface_Profile_101\"")
-        lines.append("    #   node_id: \"201\"")
+        if iface_profiles_found:
+            for ip in iface_profiles_found:
+                lines.append(f'    - profile: "{ip}"')
+                lines.append(f'      node_id: ""              # <- Entrez le node_id destination')
+        else:
+            lines.append("    # - profile: \"Interface_Profile_101\"")
+            lines.append("    #   node_id: \"201\"")
+
+        # Interface mappings - pre-remplir avec les donnees trouvees
+        lines.append("  # --- Interfaces par policy_group ---")
+        lines.append("  # Si vide: genere automatiquement depuis les onglets Excel")
+        lines.append("  # Si rempli: utilise ces mappings explicitement")
         lines.append("  interface_mappings:")
-        lines.append("    # - profile: \"Interface_Profile_101\"")
-        lines.append("    #   policy_group: \"Server_Access_PG\"")
-        lines.append('    #   interfaces: "1/1, 1/2, 1/3"')
-        lines.append('    #   description: "(T:SRV E:HOST1 I:vmnic0)"')
+        if iface_access_data:
+            # Regrouper par (profile, policy_group)
+            grouped_iface = {}
+            for entry in iface_access_data:
+                key = (entry['profile'], entry['policy_group'])
+                if key not in grouped_iface:
+                    grouped_iface[key] = {'interfaces': [], 'description': entry['description']}
+                try:
+                    fp = int(float(entry['from_port']))
+                    tp = int(float(entry['to_port']))
+                    for p in range(fp, tp + 1):
+                        iface = f"1/{p}"
+                        if iface not in grouped_iface[key]['interfaces']:
+                            grouped_iface[key]['interfaces'].append(iface)
+                except (ValueError, TypeError):
+                    pass
+            for (profile, pg), data in grouped_iface.items():
+                lines.append(f'    - profile: "{profile}"')
+                lines.append(f'      policy_group: "{pg}"')
+                lines.append(f'      interfaces: "{", ".join(data["interfaces"])}"')
+                lines.append(f'      description: "{data["description"]}"')
+        else:
+            lines.append("    # - profile: \"Interface_Profile_101\"")
+            lines.append("    #   policy_group: \"Server_Access_PG\"")
+            lines.append('    #   interfaces: "1/1, 1/2, 1/3"')
+            lines.append('    #   description: "(T:SRV E:HOST1 I:vmnic0)"')
+
+        # Node to leaf + descriptions_raw (meme format paste que wizard)
+        lines.append("  # --- Descriptions personnalisees (meme format que wizard) ---")
+        lines.append("  # Mappez chaque node_id a un nom de leaf")
+        lines.append("  node_to_leaf:")
+        lines.append("    # - node_id: \"201\"")
+        lines.append("    #   leaf_name: \"SF22-127\"")
+        lines.append("  # Collez vos descriptions au format: NOM_LEAF  NO_INTERFACE  DESCRIPTION")
+        lines.append("  # Le format genere sera: (T:SRV E:{AVANT-TIRET} I:{APRES-TIRET})")
+        lines.append("  descriptions_raw:")
+        lines.append("    # - \"SF22-127  1  VPZESX1011-onb2-p1-vmnic2\"")
+        lines.append("    # - \"SF22-127  2  VPZESX1012-onb2-p1-vmnic3\"")
 
         # Ecrire le fichier
         content = '\n'.join(lines) + '\n'
@@ -1698,14 +1779,31 @@ class FabricConverter:
             profile_to_node = iface_config.get('profile_to_node', [])
             if profile_to_node:
                 for entry in profile_to_node:
-                    profile = entry.get('profile', '')
-                    node_id = entry.get('node_id', '')
-                    if profile and node_id:
-                        self.interface_config_profile_to_node[profile] = str(node_id)
+                    if isinstance(entry, dict):
+                        profile = str(entry.get('profile', '')).strip()
+                        node_id = str(entry.get('node_id', '')).strip()
+                        if profile and node_id:
+                            self.interface_config_profile_to_node[profile] = node_id
 
             mappings = iface_config.get('interface_mappings', [])
             if mappings:
                 self.interface_config_mappings = mappings
+
+            # Node to leaf (pour descriptions)
+            node_to_leaf = iface_config.get('node_to_leaf', [])
+            if node_to_leaf:
+                self.interface_config_node_to_leaf = {}
+                for entry in node_to_leaf:
+                    if isinstance(entry, dict):
+                        nid = str(entry.get('node_id', '')).strip()
+                        leaf = str(entry.get('leaf_name', '')).strip().upper()
+                        if nid and leaf:
+                            self.interface_config_node_to_leaf[nid] = leaf
+
+            # Descriptions raw (meme format paste que wizard)
+            desc_raw = iface_config.get('descriptions_raw', [])
+            if desc_raw:
+                self.interface_config_descriptions_raw = [str(d).strip() for d in desc_raw if d]
 
         # Afficher le resume des mappings charges
         active_count = 0
@@ -1726,7 +1824,10 @@ class FabricConverter:
             self.print_info(f"Interface config: active ({self.interface_config_type})")
 
     def apply_interface_config_from_yaml(self):
-        """Applique la conversion interface_config depuis la config YAML"""
+        """Applique la conversion interface_config depuis la config YAML.
+        Meme logique que le wizard: genere l'onglet interface_config,
+        applique les descriptions (format paste), supprime les onglets sources.
+        """
         if not self.interface_config_enabled:
             return
 
@@ -1734,7 +1835,9 @@ class FabricConverter:
             self.print_warning("Interface config active mais aucun mapping defini")
             return
 
-        self.print_info("Application de la conversion interface_config...")
+        print("\n" + "=" * 58)
+        print("[>] CONVERSION INTERFACE PROFILE -> INTERFACE CONFIG")
+        print("=" * 58)
 
         interface_type = self.interface_config_type
         interface_rows = []
@@ -1744,7 +1847,7 @@ class FabricConverter:
             for entry in self.interface_config_mappings:
                 profile = entry.get('profile', '')
                 policy_group = entry.get('policy_group', '')
-                interfaces_str = entry.get('interfaces', '')
+                interfaces_str = str(entry.get('interfaces', ''))
                 description = entry.get('description', '')
 
                 node_id = self.interface_config_profile_to_node.get(profile, '')
@@ -1806,22 +1909,77 @@ class FabricConverter:
                 except (ValueError, TypeError):
                     pass
 
-        if interface_rows:
-            interface_config_df = pd.DataFrame(interface_rows)
-            columns_order = ['node', 'interface', 'policy_group', 'role', 'port_type',
-                           'interface_type', 'admin_state', 'description']
-            interface_config_df = interface_config_df[columns_order]
-
-            self.excel_data['interface_config'] = interface_config_df
-
-            if 'interface_policy_leaf_profile' in self.excel_data:
-                del self.excel_data['interface_policy_leaf_profile']
-            if 'access_port_to_int_policy_leaf' in self.excel_data:
-                del self.excel_data['access_port_to_int_policy_leaf']
-
-            self.print_success(f"interface_config genere: {len(interface_rows)} ligne(s)")
-        else:
+        if not interface_rows:
             self.print_warning("Aucune interface a creer depuis la config YAML")
+            return
+
+        self.print_info(f"{len(interface_rows)} interface(s) generee(s)")
+
+        # --- Appliquer les descriptions_raw (meme format paste que wizard) ---
+        if self.interface_config_descriptions_raw and self.interface_config_node_to_leaf:
+            self.print_info("Application des descriptions personnalisees...")
+
+            # Construire le mapping inverse leaf_name -> node_id
+            leaf_to_node = {leaf: node for node, leaf in self.interface_config_node_to_leaf.items()}
+
+            # Parser chaque ligne: NOM_LEAF  NO_INTERFACE  DESCRIPTION
+            descriptions_map = {}  # (node_id, interface) -> description formatee
+            for line in self.interface_config_descriptions_raw:
+                parts = line.split()
+                if len(parts) >= 3:
+                    leaf = parts[0].upper()
+                    try:
+                        iface_num = int(parts[1])
+                        iface = f"1/{iface_num}"
+                    except ValueError:
+                        continue
+
+                    # Trouver le node_id correspondant au leaf
+                    node_for_leaf = leaf_to_node.get(leaf, '')
+                    if not node_for_leaf:
+                        continue
+
+                    # Description = tout apres le numero d'interface
+                    desc_text = ' '.join(parts[2:]).upper()
+
+                    # Formater: (T:SRV E:{AVANT-TIRET} I:{APRES-TIRET})
+                    if '-' in desc_text:
+                        first_dash = desc_text.index('-')
+                        e_part = desc_text[:first_dash]
+                        i_part = desc_text[first_dash+1:]
+                    else:
+                        e_part = desc_text
+                        i_part = ''
+
+                    formatted_desc = f"(T:SRV E:{e_part} I:{i_part})"
+                    descriptions_map[(node_for_leaf, iface)] = formatted_desc
+
+            # Appliquer les descriptions aux interfaces
+            updated_count = 0
+            for mapping in interface_rows:
+                key = (mapping['node'], mapping['interface'])
+                if key in descriptions_map:
+                    mapping['description'] = descriptions_map[key]
+                    updated_count += 1
+
+            if updated_count > 0:
+                self.print_success(f"{updated_count} description(s) personnalisee(s) appliquee(s)")
+
+        # --- Creer le DataFrame et ajouter a l'Excel ---
+        interface_config_df = pd.DataFrame(interface_rows)
+        columns_order = ['node', 'interface', 'policy_group', 'role', 'port_type',
+                       'interface_type', 'admin_state', 'description']
+        interface_config_df = interface_config_df[columns_order]
+
+        self.excel_data['interface_config'] = interface_config_df
+
+        if 'interface_policy_leaf_profile' in self.excel_data:
+            del self.excel_data['interface_policy_leaf_profile']
+        if 'access_port_to_int_policy_leaf' in self.excel_data:
+            del self.excel_data['access_port_to_int_policy_leaf']
+
+        self.print_success(f"interface_config genere: {len(interface_rows)} ligne(s)")
+        self.print_info("Onglets sources supprimes: interface_policy_leaf_profile, access_port_to_int_policy_leaf")
 
     def run_yaml(self, yaml_file):
         """Execute le mode YAML: charge le fichier et applique les conversions"""
