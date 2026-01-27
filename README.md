@@ -1,268 +1,286 @@
 # ACI Migration Tool
 
-🚀 Outil autonome d'extraction de configuration ACI pour migration d'EPG
+Outil de migration de services EPG et L3Out entre fabrics Cisco ACI.
 
-## 📋 Description
+## Vue d'ensemble
 
-Cet outil permet d'extraire de manière ciblée la configuration d'EPG (Endpoint Groups) spécifiques depuis un fabric Cisco ACI, avec toutes leurs dépendances (Bridge Domains, VLANs, Domains, AEPs, Policy Groups).
+Ce projet automatise la migration de configuration ACI en 3 etapes :
 
-**Parfait pour:**
-- Migration d'EPG entre fabrics ACI
-- Backup de configuration ciblée
-- Documentation de configuration
-- Clonage de configuration EPG
+```
+┌─────────────────────┐     ┌──────────────────────┐     ┌──────────────────────────┐
+│  1. EXTRACTION      │     │  2. CONVERSION       │     │  3. DEPLOIEMENT          │
+│                     │     │                      │     │                          │
+│ extract_migration.py│ ──> │ fabric_converter.py  │ ──> │ aci-fabric-automation    │
+│                     │     │                      │     │ (projet separe)          │
+│ Fabric SOURCE       │     │ Adapte les valeurs   │     │ Deploie sur la fabric    │
+│ -> Excel            │     │ -> Excel converti    │     │ DESTINATION via Ansible  │
+└─────────────────────┘     └──────────────────────┘     └──────────────────────────┘
+```
 
-## ✨ Fonctionnalités
+**Extraction** : Se connecte a l'APIC (ou lit un backup JSON) et extrait les EPG demandes avec toutes leurs dependances, ainsi que les L3Out (standard et floating) avec leur configuration BGP complete.
 
-- ✅ **100% Autonome** - Aucune dépendance externe
-- ✅ **Credentials Interactifs** - Demande IP/user/password au démarrage
-- ✅ **Filtrage Intelligent** - Extrait UNIQUEMENT les objets liés aux EPGs demandés
-- ✅ **Export Multi-format** - CSV + Excel
-- ✅ **Compatibilité Ansible** - CSV prêts pour déploiement
-- ✅ **Sécurisé** - Password masqué, jamais sauvegardé
+**Conversion** : Prend le fichier Excel extrait et remplace les valeurs (tenants, VRFs, node IDs, paths, etc.) pour correspondre a la fabric de destination.
 
-## 📦 Objets Extraits
+**Deploiement** : Le fichier Excel converti est utilise par notre projet [aci-fabric-automation](https://github.com/JFGrenier07/aci-fabric-automation) pour deployer la configuration sur la nouvelle fabric via Ansible.
 
-| Objet | Description |
-|-------|-------------|
-| EPG | Endpoint Groups |
-| Bridge Domain | avec VRF |
-| Domain | Physical/L3 |
-| VLAN Pool | avec Encap Blocks |
-| AEP | Attachable Entity Profiles |
-| Interface Policy Groups | avec toutes les policies (CDP, LLDP, etc.) |
-
-**+ Toutes les relations entre ces objets**
-
-## 🚀 Installation
+## Installation
 
 ```bash
-# Cloner le repository
 git clone https://github.com/JFGrenier07/Aci-Migration-.git
 cd Aci-Migration-
 
-# Installer les dépendances Python
 pip install pandas openpyxl requests pyyaml urllib3
 ```
 
-## 📖 Utilisation Rapide
+## Fichier de configuration : `extraction_list.yml`
 
-### Choix du Mode
+Ce fichier definit ce qui sera extrait de la fabric source. Il contient deux types d'entrees :
 
-Le script supporte **2 modes** d'extraction:
+### Entrees EPG
 
-1. **🌐 Mode LIVE** - Connexion directe à l'APIC
-2. **📦 Mode BACKUP** - Lecture d'un fichier JSON local
-
----
-
-### Mode 1: Connexion LIVE à l'APIC
-
-#### 1. Lister les EPG disponibles (optionnel)
-
-```bash
-python3 list_all_epgs.py
-```
-
-**Le script demande:**
-```
-🌐 Adresse IP de l'APIC: 192.168.0.245
-👤 Nom d'utilisateur: admin
-🔒 Mot de passe: ********
-```
-
-#### 2. Éditer la liste des EPG à extraire
+Chaque bloc definit un tenant, un Application Profile et la liste des EPG a extraire.
+L'outil extrait automatiquement toutes les dependances : Bridge Domains, VRFs, subnets,
+VLAN pools, domains, AEPs, contracts, filters, interface policies.
 
 ```yaml
-# epg_list.yml
 ---
 tenant: Production
 ap: Database_AP
 epgs:
   - DBServers_EPG
-
----
-tenant: Production
-ap: ERP_AP
-epgs:
   - AppServers_EPG
-```
-
-#### 3. Lancer l'extraction
-
-```bash
-python3 extract_epg_migration.py
-```
-
-**Le script demande:**
-```
-MODE D'EXTRACTION
-1. 🌐 Connexion LIVE à l'APIC
-2. 📦 Backup JSON (fichier local)
-
-Choisir le mode (1 ou 2): 1
-
-CONNEXION À L'ACI FABRIC
-🌐 Adresse IP de l'APIC: 192.168.0.245
-👤 Nom d'utilisateur: admin
-🔒 Mot de passe: ********
-```
-
-**Résultat:**
-- CSV dans `csv_out/` (11 fichiers)
-- Excel `epg_migration.xlsx` (10 onglets)
 
 ---
-
-### Mode 2: Depuis un Backup JSON ou tar.gz
-
-#### 1. Préparer le fichier de backup
-
-Place ton snapshot ACI dans le répertoire:
-```
-migration/
-├── extract_epg_migration.py
-├── fabric_snapshot.json      ← Backup JSON direct
-├── fabric_snapshot.tar.gz    ← OU snapshot ACI complet
-└── epg_list.yml
+tenant: Autre_Tenant
+ap: Web_AP
+epgs:
+  - WebFrontend_EPG
 ```
 
-**Formats supportés:**
-- `.json` - Fichier JSON direct (format API ACI)
-- `.tar.gz` ou `.tgz` - Archive de snapshot ACI (extraction automatique)
+### Entrees L3Out
 
-#### 2. Éditer epg_list.yml
+Chaque bloc definit un L3Out a extraire avec son type (standard ou floating).
+L'outil extrait la configuration complete : node profiles, logical nodes, interface profiles,
+BGP peers, external EPGs, external subnets, contracts, floating SVIs, route control.
 
-Même chose que mode Live - liste tes EPG.
+```yaml
+---
+floating: no
+tenant: Production
+l3out: L3Out_Prod_Standard
 
-#### 3. Lancer l'extraction
+---
+floating: yes
+tenant: Production
+l3out: L3Out_Prod_Floating
+```
+
+Le parametre `floating` indique le type de L3Out :
+- `no` : L3Out standard (interfaces physiques/SVI)
+- `yes` : L3Out floating (floating SVI avec paths secondaires)
+
+### Exemple complet
+
+```yaml
+# === EPGs a extraire ===
+---
+tenant: PROD-TN
+ap: PROD-ANP
+epgs:
+  - RL00001-EPG
+  - RL00002-EPG
+
+# === L3Out standard ===
+---
+floating: no
+tenant: PROD-TN
+l3out: L3Out-PROD-Standard
+
+# === L3Out floating ===
+---
+floating: yes
+tenant: PROD-TN
+l3out: L3Out-PROD-Floating
+```
+
+## Etape 1 : Extraction (`extract_migration.py`)
 
 ```bash
-python3 extract_epg_migration.py
+python3 extract_migration.py
 ```
 
-**Le script demande:**
+Le script demande le nom du fichier Excel de sortie, puis le mode d'extraction.
+
+### Mode 1 - Connexion LIVE a l'APIC
+
+Le script se connecte directement a l'APIC via API REST pour extraire la configuration.
+
 ```
+Nom du fichier Excel de sortie [epg_migration.xlsx]:
 MODE D'EXTRACTION
-1. 🌐 Connexion LIVE à l'APIC
-2. 📦 Backup JSON (fichier local)
+[1] Connexion LIVE a l'APIC
+[2] Backup JSON (fichier local)
 
-Choisir le mode (1 ou 2): 2
-
-CHARGEMENT DEPUIS BACKUP
-📁 Chemin du fichier (JSON ou tar.gz): fabric_snapshot.tar.gz
+Choisir le mode: 1
+Adresse IP de l'APIC: 192.168.0.245
+Nom d'utilisateur: admin
+Mot de passe: ********
 ```
 
-**Avantages du mode Backup:**
-- ✅ Pas besoin de credentials
-- ✅ Travail hors ligne
-- ✅ Tests sans accès à la fabric
-- ✅ Plus rapide (pas de connexion réseau)
+### Mode 2 - Depuis un backup JSON ou tar.gz
 
-**Résultat:** Identique au mode Live!
+Pour travailler hors ligne ou sans acces a la fabric.
 
-## 📂 Fichiers du Projet
+```
+Choisir le mode: 2
+Chemin du fichier (JSON ou tar.gz): fabric_snapshot.tar.gz
+```
 
-### ✅ Fichiers Essentiels (tout ce dont vous avez besoin!)
+Formats supportes : `.json` (API ACI) ou `.tar.gz` / `.tgz` (snapshot ACI).
 
-| Fichier | Description | Requis? |
-|---------|-------------|---------|
-| `extract_epg_migration.py` | **Script principal** d'extraction | ✅ **OBLIGATOIRE** |
-| `epg_list.yml` | **Configuration** des EPG à extraire | ✅ **OBLIGATOIRE** |
-| `list_all_epgs.py` | Utilitaire pour lister tous les EPG | 🔵 **Recommandé** |
-| `README.md` | Ce guide | 📖 Documentation |
-| `.gitignore` | Config Git | ⚙️ Git seulement |
+### Objets extraits
 
-### 📁 Répertoires
+| Categorie | Objets |
+|-----------|--------|
+| Infrastructure | VLAN Pools, Encap Blocks, Domains, AEPs |
+| Tenant/BD | Bridge Domains, Subnets, BD-to-L3Out |
+| EPG | EPGs, EPG-to-Domain, AEP-to-EPG |
+| L3Out Standard | Node Profiles, Logical Nodes, Interface Profiles, Interfaces, BGP Peers, BGP Protocol Profiles |
+| L3Out Floating | Floating SVIs, Floating SVI Paths, Secondary IPs, Floating SVI Path Sec, Floating BGP Peers, VPC Members |
+| L3Out Externe | External EPGs, External Subnets, ExtEPG-to-Contract |
+| Route Control | Match Rules, Match Route Destinations, Route Control Profiles, Route Control Contexts |
+| Contracts | Contracts, Subjects, Filters |
+| Interface Policies | CDP, LLDP, MCP, Link Level, Port Channel, Spanning Tree, Leaf Profiles, Policy Groups |
+
+### Resultat
+
+- `csv_out/` : fichiers CSV intermediaires (generes automatiquement, un par type d'objet)
+- `epg_migration.xlsx` : fichier Excel avec un onglet par type d'objet (jusqu'a 34 onglets)
+
+## Etape 2 : Conversion (`fabric_converter.py`)
+
+Prend le fichier Excel de l'etape 1 et remplace les valeurs pour la fabric de destination.
+
+```bash
+python3 fabric_converter.py
+```
+
+```
+Fichier Excel source: epg_migration.xlsx
+
+MODE DE CONVERSION
+[1] Wizard interactif (etape par etape)
+[2] Fichier de configuration (texte plat)
+
+Choix [1]:
+```
+
+### Mode 1 - Wizard interactif
+
+Le wizard pose les questions une par une. A chaque etape, entrez la nouvelle valeur
+ou appuyez sur Entree pour garder la valeur existante.
+
+**Les 7 etapes du wizard :**
+
+| Etape | Description |
+|-------|-------------|
+| 1. Tenants | Mapping automatique Tenant → VRF → AP (convention -TN / -VRF / -ANP) |
+| 2. L3Out (BD) | L3Out references par les Bridge Domains |
+| 3. L3Out unifie | Node IDs, Node Profiles, Interface Profiles, Path EPs, Local AS |
+| 4. Route Control | Match Rules, Route Control Profiles, Route Control Contexts |
+| 5. Routage BD | Option pour desactiver le routage de tous les Bridge Domains |
+| 6. Descriptions VLAN | Coller des lignes au format `VLAN,DESCRIPTION` |
+| 7. Interface Config | Conversion Interface Profile → interface_config avec descriptions |
+
+### Mode 2 - Fichier de configuration
+
+Pour les migrations repetitives, le fichier de configuration evite de repasser
+par le wizard a chaque fois.
+
+**Etape A - Generer le template :**
+
+```bash
+python3 fabric_converter.py
+# Entrer le fichier Excel
+# Choisir [2] puis [A]
+```
+
+Cela genere un fichier `.cfg` pre-rempli avec toutes les valeurs trouvees dans le Excel.
+Exemple de contenu :
+
+```ini
+[TENANTS]
+PROD-TN = PROD-TN
+
+[NODE_IDS]
+101 = 101
+
+[PATH_EPS]
+topology/pod-1/paths-101/pathep-[eth1/1] = topology/pod-1/paths-101/pathep-[eth1/1]
+
+[OPTIONS]
+disable_bd_routing = false
+
+[VLAN_DESCRIPTIONS]
+# Collez vos lignes au format VLAN,DESCRIPTION
+200,RL00001_10.1.1.1/24_Serveur_Web
+
+[INTERFACE_CONFIG_DESCRIPTIONS]
+# Meme format que le wizard : NOM_LEAF  NO_INTERFACE  DESCRIPTION
+SF22-127  3  VPZESX1011-onb2-p1-vmnic2
+```
+
+Le format est simple : `source = destination`. Modifiez uniquement la partie droite
+(destination). Si source et destination sont identiques, aucune conversion n'est appliquee.
+
+**Etape B - Appliquer le fichier :**
+
+Une fois le fichier `.cfg` modifie, relancez le script pour l'appliquer :
+
+```bash
+python3 fabric_converter.py
+# Entrer le fichier Excel
+# Choisir [2] puis [B]
+# Entrer le chemin du fichier .cfg
+```
+
+Le script charge le fichier, affiche un resume des changements, demande confirmation,
+puis genere le fichier Excel converti.
+
+### Resultat
+
+Le fichier `{nom}_converted.xlsx` est pret pour le deploiement.
+
+## Etape 3 : Deploiement
+
+Pour deployer la configuration convertie sur la fabric de destination, utilisez notre projet
+**[aci-fabric-automation](https://github.com/JFGrenier07/aci-fabric-automation)**.
+
+Ce projet utilise Ansible pour configurer automatiquement la fabric ACI
+a partir des fichiers CSV generes par cet outil de migration.
+
+## Structure du projet
 
 ```
 Aci-Migration-/
-├── extract_epg_migration.py    ← Script principal
-├── list_all_epgs.py            ← Liste les EPG (optionnel)
-├── epg_list.yml                ← Votre config
-├── csv_out/                    ← Créé automatiquement (résultats CSV)
-└── epg_migration.xlsx          ← Créé automatiquement (résultat Excel)
+├── extract_migration.py     # Extraction de la config EPG + L3Out depuis ACI
+├── fabric_converter.py      # Conversion des valeurs pour la nouvelle fabric
+├── extraction_list.yml      # Liste des EPG et L3Out a extraire
+├── csv_out/                 # CSV intermediaires (genere automatiquement)
+└── README.md
 ```
 
-**C'est tout!** Pas de fichiers compliqués, pas de configuration cachée.
+## Securite
 
-## 🔐 Sécurité
+- Mot de passe masque pendant la saisie (`getpass`)
+- Credentials jamais sauvegardes sur disque
+- Utilisation en memoire uniquement
 
-- Password masqué pendant la saisie (`getpass`)
-- Credentials jamais sauvegardés sur disque
-- Utilisation en mémoire uniquement
-- SSL warnings désactivés (normal pour certificats auto-signés ACI)
+## Compatibilite
 
-## 🎯 Exemple Complet
+- Cisco ACI 5.x / 6.x
+- Python 3.8+
 
-```bash
-# 1. Lister les EPG
-python3 list_all_epgs.py
-# → Noter les noms exacts
+## Auteur
 
-# 2. Éditer epg_list.yml
-nano epg_list.yml
-
-# 3. Extraire
-python3 extract_epg_migration.py
-# → Entrer credentials
-# → Attendre extraction
-
-# 4. Vérifier résultats
-ls csv_out/
-ls -lh epg_migration.xlsx
-```
-
-## 🧪 Tests
-
-Testé avec:
-- ✅ Cisco ACI 5.x
-- ✅ Cisco ACI 6.x
-- ✅ Python 3.8+
-- ✅ Multiple fabrics
-
-## 🤝 Contribution
-
-Les contributions sont les bienvenues! N'hésitez pas à:
-- 🐛 Signaler des bugs
-- 💡 Proposer des améliorations
-- 📝 Améliorer la documentation
-
-## 📝 License
-
-MIT License - Libre d'utilisation
-
-## 👤 Auteur
-
-**JF Grenier**
-- GitHub: [@JFGrenier07](https://github.com/JFGrenier07)
-- Tool: Développé avec Claude Code
-
-## 🔄 Version
-
-**Version actuelle: 2.2** (2025-12-07)
-
-### Nouveautés v2.2
-- ✅ Support L3Out complet (Standard + Floating)
-- ✅ BGP Peer Floating avec extraction correcte node_id et vlan
-- ✅ ExtEPG avec contracts (provider/consumer)
-- ✅ Route Control (profiles, contexts, match rules)
-- ✅ Filtrage BD→L3Out pour cohérence référentielle
-
-### Fonctionnalités
-- ✅ Credentials interactifs (IP/user/password)
-- ✅ 100% autonome (aucune dépendance externe)
-- ✅ Support tar.gz (extraction automatique des snapshots ACI)
-- ✅ Dual-mode: Live APIC ou Backup local
-- ✅ Support Interface Policy Groups
-- ✅ Export CSV + Excel (27 onglets)
-
-## ⭐ Support
-
-Si cet outil vous est utile, n'oubliez pas de mettre une ⭐ sur GitHub!
-
----
-
-**Status:** ✅ Production Ready  
-**Date:** 2025-12-04  
-**Développé avec:** Claude Code + ❤️
+**JF Grenier** - [@JFGrenier07](https://github.com/JFGrenier07)
