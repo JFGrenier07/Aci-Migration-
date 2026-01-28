@@ -1056,12 +1056,15 @@ class EPGMigrationExtractor:
                                                     # Extract remote_asn and local_as_number from children
                                                     remote_asn = ''
                                                     local_as_number = ''
+                                                    local_as_number_config = ''
                                                     peer_children = peer_data.get('children', [])
                                                     for peer_child in peer_children:
                                                         if 'bgpAsP' in peer_child:
                                                             remote_asn = peer_child['bgpAsP']['attributes'].get('asn', '')
                                                         elif 'bgpLocalAsnP' in peer_child:
-                                                            local_as_number = peer_child['bgpLocalAsnP']['attributes'].get('localAsn', '')
+                                                            local_as_attr = peer_child['bgpLocalAsnP']['attributes']
+                                                            local_as_number = local_as_attr.get('localAsn', '')
+                                                            local_as_number_config = local_as_attr.get('asnPropagate', '')
 
                                                     self.found_l3out_bgp_peers_floating.append({
                                                         'tenant': tenant_name,
@@ -1077,6 +1080,7 @@ class EPGMigrationExtractor:
                                                         'weight': peer_attr.get('weight', ''),
                                                         'remote_asn': remote_asn,
                                                         'local_as_number': local_as_number,
+                                                        'local_as_number_config': local_as_number_config,
                                                         'bgp_controls': peer_attr.get('ctrl', ''),
                                                         'peer_controls': peer_attr.get('peerCtrl', ''),
                                                         'address_type_controls': peer_attr.get('addrTCtrl', '')
@@ -1093,16 +1097,32 @@ class EPGMigrationExtractor:
                         if not extepg_name:
                             continue
 
+                        # Pre-scan children for Route Control Profiles
+                        extepg_children = l3out_child['l3extInstP'].get('children', [])
+                        route_control_import = ''
+                        route_control_export = ''
+                        for extepg_child in extepg_children:
+                            if 'l3extRsInstPToProfile' in extepg_child:
+                                rcp_attr = extepg_child['l3extRsInstPToProfile']['attributes']
+                                rcp_name = rcp_attr.get('tnRtctrlProfileName', '')
+                                rcp_dir = rcp_attr.get('direction', '')
+                                if rcp_name:
+                                    if rcp_dir == 'import':
+                                        route_control_import = rcp_name
+                                    elif rcp_dir == 'export':
+                                        route_control_export = rcp_name
+
                         # Save ExtEPG
                         self.found_l3out_extepgs.append({
                             'tenant': tenant_name,
                             'l3out': l3out_name,
                             'extepg': extepg_name,
-                            'description': extepg_attr.get('descr', '')
+                            'description': extepg_attr.get('descr', ''),
+                            'route_control_profile_import': route_control_import,
+                            'route_control_profile_export': route_control_export
                         })
 
-                        # Extract children of ExtEPG
-                        extepg_children = l3out_child['l3extInstP'].get('children', [])
+                        # Extract children of ExtEPG (subnets, contracts)
 
                         for extepg_child in extepg_children:
                             # ExtSubnet
@@ -1301,6 +1321,16 @@ class EPGMigrationExtractor:
                 print(f"   ✅ Route Control Contexts: {len(self.found_route_control_contexts)}")
                 print(f"   ✅ Match Route Destinations: {len(self.found_match_route_dests)}")
 
+        # Chercher les descriptions des VLAN pools
+        all_vlan_pools_obj = self.find_objects_recursive(self.aci_data, 'fvnsVlanInstP')
+        vlan_pool_descr = {}
+        for vp in all_vlan_pools_obj:
+            vp_attr = vp.get('attributes', {})
+            vp_name = vp_attr.get('name', '')
+            vp_descr = vp_attr.get('descr', '')
+            if vp_name:
+                vlan_pool_descr[vp_name] = vp_descr
+
         # Maintenant, pour chaque domain trouvé, trouver les VLAN pools
         all_dom_pool_rels = self.find_objects_recursive(self.aci_data, 'infraRsVlanNs')
         all_dom_pool_rels += self.find_objects_recursive(self.aci_data, 'l3extRsVlanNs')
@@ -1344,7 +1374,7 @@ class EPGMigrationExtractor:
                         pool_data = {
                             'pool': pool_name,
                             'pool_allocation_mode': pool_mode,
-                            'description': ''
+                            'description': vlan_pool_descr.get(pool_name, '')
                         }
                         # Éviter les doublons
                         if not any(p['pool'] == pool_name for p in self.found_vlan_pools):

@@ -75,7 +75,7 @@ class FabricConverter:
 
         # Colonnes Route Control
         self.match_rule_columns = ['match_rule']
-        self.route_control_profile_columns = ['route_control_profile']
+        self.route_control_profile_columns = ['route_control_profile', 'route_control_profile_import', 'route_control_profile_export']
         self.route_control_context_columns = ['route_control_context']
 
     def load_excel(self):
