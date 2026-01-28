@@ -70,6 +70,8 @@ class EPGMigrationExtractor:
         self.found_l3out_extepg_to_contract = []
         self.found_l3out_vpc_members = []
         self.found_bd_to_l3out = []
+        self.found_l3out_bfd_interface_profiles = []  # BFD Interface Profile associations
+        self.found_l3out_default_route_leak_policies = []  # Default Route Leak Policies
         self.found_match_rules = []
         self.found_match_route_dests = []
         self.found_route_control_profiles = []
@@ -702,6 +704,16 @@ class EPGMigrationExtractor:
                     elif 'eigrpExtP' in l3out_child:
                         if 'eigrp' not in l3protocols:
                             l3protocols.append('eigrp')
+                    # Extract Default Route Leak Policy
+                    elif 'l3extDefaultRouteLeakP' in l3out_child:
+                        leak_attr = l3out_child['l3extDefaultRouteLeakP']['attributes']
+                        self.found_l3out_default_route_leak_policies.append({
+                            'tenant': tenant_name,
+                            'l3out': l3out_name,
+                            'always': leak_attr.get('always', 'yes'),
+                            'criteria': leak_attr.get('criteria', 'only'),
+                            'scope': leak_attr.get('scope', 'l3-out')
+                        })
 
                 # Save L3Out
                 self.found_l3outs.append({
@@ -817,6 +829,24 @@ class EPGMigrationExtractor:
 
                             # Extract interfaces from interface profile
                             if_profile_children = np_child['l3extLIfP'].get('children', [])
+
+                            # Extract BFD Interface Profile if present
+                            for if_child in if_profile_children:
+                                if 'bfdIfP' in if_child:
+                                    bfd_children = if_child['bfdIfP'].get('children', [])
+                                    bfd_policy = ''
+                                    for bfd_child in bfd_children:
+                                        if 'bfdRsIfPol' in bfd_child:
+                                            bfd_policy = bfd_child['bfdRsIfPol']['attributes'].get('tnBfdIfPolName', '')
+                                    if bfd_policy:
+                                        self.found_l3out_bfd_interface_profiles.append({
+                                            'tenant': tenant_name,
+                                            'l3out': l3out_name,
+                                            'node_profile': node_profile_name,
+                                            'interface_profile': if_profile_name,
+                                            'bfd_interface_policy': bfd_policy
+                                        })
+                                    break  # Only one BFD profile per interface profile
 
                             for if_child in if_profile_children:
                                 # ================================================
@@ -1907,6 +1937,8 @@ class EPGMigrationExtractor:
             'l3out_logical_interface_vpc_mem': self.found_l3out_vpc_members,
             'l3out_floating_svi_path_sec': self.found_l3out_floating_svi_path_sec,
             'l3out_bgp_peer_floating': self.found_l3out_bgp_peers_floating,
+            'l3out_bfd_interface_profile': self.found_l3out_bfd_interface_profiles,
+            'l3out_default_route_leak_policy': self.found_l3out_default_route_leak_policies,
 
             # Route Control objects
             'match_rule': self.found_match_rules,
@@ -1945,6 +1977,7 @@ class EPGMigrationExtractor:
             'l3out_extepg', 'l3out_extsubnet', 'l3out_extepg_to_contract',
             'l3out_floating_svi', 'l3out_floating_svi_path', 'l3out_floating_svi_secondary_ip',
             'l3out_logical_interface_vpc_mem', 'l3out_floating_svi_path_sec', 'l3out_bgp_peer_floating',
+            'l3out_bfd_interface_profile', 'l3out_default_route_leak_policy',
             'match_rule', 'match_route_destination', 'route_control_profile', 'route_control_context'
         ]
 
