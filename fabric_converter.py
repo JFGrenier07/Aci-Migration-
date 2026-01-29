@@ -235,9 +235,9 @@ class FabricConverter:
     def prompt_mapping(self, prompt_text, source_value, default=None):
         """Demande un mapping à l'utilisateur"""
         if default:
-            print(f"   {prompt_text} [{source_value}] → [{default}]: ", end="")
+            print(f"   {prompt_text} [{source_value}] → [{default}]: ", end="", flush=True)
         else:
-            print(f"   {prompt_text} [{source_value}] → : ", end="")
+            print(f"   {prompt_text} [{source_value}] → : ", end="", flush=True)
 
         user_input = input().strip()
 
@@ -745,7 +745,7 @@ class FabricConverter:
         print("=" * 60)
         print("Désactiver le routage pour tous les Bridge Domains?")
         print("(Mettra enable_routing = false dans l'onglet bd)")
-        print("\nDésactiver le routage? [o/N]: ", end="")
+        print("\nDésactiver le routage? [o/N]: ", end="", flush=True)
 
         response = input().strip().lower()
         self.disable_bd_routing = response in ['o', 'oui', 'y', 'yes']
@@ -771,8 +771,7 @@ class FabricConverter:
         print("   • Si contient P1 ou P2 → nom_SEGMENTS_VLAN")
         print("   • Si contient P3 ou P4 (sans L3O) → nom_VTEP")
         print("   • Si contient P3 ou P4 avec L3O → nom_L3OUT")
-        print("\nAuto-générer les descriptions? [o/N]: ", end="")
-        sys.stdout.flush()
+        print("\nAuto-générer les descriptions? [o/N]: ", end="", flush=True)
 
         response = input().strip().lower()
         if response not in ['o', 'oui', 'y', 'yes']:
@@ -836,8 +835,7 @@ class FabricConverter:
             if auto_desc:
                 print(f"\n   Pool: {pool_name}")
                 print(f"   Description auto: {auto_desc}")
-                print(f"   → Confirmer ou modifier [{auto_desc}]: ", end="")
-                sys.stdout.flush()
+                print(f"   → Confirmer ou modifier [{auto_desc}]: ", end="", flush=True)
 
                 user_input = input().strip()
                 final_desc = user_input if user_input else auto_desc
@@ -893,7 +891,7 @@ class FabricConverter:
         print("📝 MODIFICATION DES DESCRIPTIONS PAR VLAN")
         print("=" * 60)
         print("Voulez-vous modifier des descriptions basées sur VLAN?")
-        print("\nModifier des descriptions? [o/N]: ", end="")
+        print("\nModifier des descriptions? [o/N]: ", end="", flush=True)
 
         response = input().strip().lower()
         if response not in ['o', 'oui', 'y', 'yes']:
@@ -1188,7 +1186,7 @@ class FabricConverter:
             return
 
         # Demander si l'utilisateur veut faire cette conversion
-        print("\nVoulez-vous convertir les Interface Profiles vers interface_config? [o/N]: ", end="")
+        print("\nVoulez-vous convertir les Interface Profiles vers interface_config? [o/N]: ", end="", flush=True)
         choice = input().strip().lower()
         if choice not in ['o', 'oui', 'y', 'yes']:
             print("   → Conversion interface_config ignorée")
@@ -1209,7 +1207,7 @@ class FabricConverter:
         print("-" * 60)
         profile_to_node = {}
         for profile in interface_profiles:
-            print(f"\n'{profile}' → Entrez le Node ID: ", end="")
+            print(f"\n'{profile}' → Entrez le Node ID: ", end="", flush=True)
             node_id = input().strip()
             if node_id:
                 profile_to_node[profile] = node_id
@@ -1226,7 +1224,7 @@ class FabricConverter:
         print("-" * 60)
         print("[1] Access (switch_port) - DÉFAUT")
         print("[2] PC/VPC (pc_or_vpc)")
-        print("\nChoix [1]: ", end="")
+        print("\nChoix [1]: ", end="", flush=True)
         type_choice = input().strip()
 
         if type_choice == '2':
@@ -1299,7 +1297,7 @@ class FabricConverter:
             print(f"\n   Entrez les nouvelles interfaces (séparées par virgule)")
             print(f"   Format: 1/1, 1/2, 1/3 ou eth1/1, eth1/2")
             print(f"   [Entrée vide = garder les mêmes interfaces]")
-            print(f"\n   → ", end="")
+            print(f"\n   → ", end="", flush=True)
 
             new_interfaces_input = input().strip()
 
@@ -1331,7 +1329,7 @@ class FabricConverter:
             print("\n" + "=" * 60)
             print("📝 MAPPING DES DESCRIPTIONS")
             print("=" * 60)
-            print("\nVoulez-vous ajouter des descriptions personnalisées? [o/N]: ", end="")
+            print("\nVoulez-vous ajouter des descriptions personnalisées? [o/N]: ", end="", flush=True)
             desc_choice = input().strip().lower()
 
             if desc_choice in ['o', 'oui', 'y', 'yes']:
@@ -1345,7 +1343,7 @@ class FabricConverter:
                 node_to_leaf = {}
 
                 for node in sorted(unique_nodes):
-                    print(f"\n   Node '{node}' → Nom de Leaf (ex: SF22-127): ", end="")
+                    print(f"\n   Node '{node}' → Nom de Leaf (ex: SF22-127): ", end="", flush=True)
                     leaf_name = input().strip().upper()
                     if leaf_name:
                         node_to_leaf[node] = leaf_name
@@ -1995,7 +1993,7 @@ class FabricConverter:
         print("\n" + "=" * 60)
         print(f"📁 Fichier de sortie: {self.output_excel}")
         print("=" * 60)
-        print("\nAppliquer les conversions? [O/n]: ", end="")
+        print("\nAppliquer les conversions? [O/n]: ", end="", flush=True)
         confirm = input().strip().lower()
 
         if confirm in ['n', 'no', 'non']:
@@ -2045,7 +2043,7 @@ class FabricConverter:
         print("\n" + "=" * 60)
         print(f"📁 Fichier de sortie: {self.output_excel}")
         print("=" * 60)
-        print("\nAppliquer les conversions? [O/n]: ", end="")
+        print("\nAppliquer les conversions? [O/n]: ", end="", flush=True)
         confirm = input().strip().lower()
 
         if confirm in ['n', 'no', 'non']:
@@ -2097,8 +2095,7 @@ class FabricConverter:
         print("=" * 60)
         print("\n   [1] Wizard interactif (étape par étape)")
         print("   [2] Fichier de configuration (texte plat)")
-        print("\nChoix [1]: ", end="")
-        sys.stdout.flush()
+        print("\nChoix [1]: ", end="", flush=True)
         mode = input().strip()
 
         if mode == '2':
@@ -2108,12 +2105,12 @@ class FabricConverter:
             print("-" * 60)
             print("\n   [A] Générer un template (pré-rempli depuis le Excel)")
             print("   [B] Charger un fichier existant et appliquer")
-            print("\nChoix [A]: ", end="")
+            print("\nChoix [A]: ", end="", flush=True)
             sub = input().strip().upper()
 
             if sub == 'B':
                 # Charger un fichier existant
-                print("\n📁 Fichier de configuration (.cfg): ", end="")
+                print("\n📁 Fichier de configuration (.cfg): ", end="", flush=True)
                 config_file = input().strip()
                 if not config_file:
                     print("❌ Aucun fichier spécifié")
@@ -2140,8 +2137,7 @@ def main():
     print("")
 
     # Demander le fichier Excel source
-    print("📁 Fichier Excel source: ", end="")
-    sys.stdout.flush()
+    print("📁 Fichier Excel source: ", end="", flush=True)
     excel_file = input().strip()
 
     if not excel_file:
