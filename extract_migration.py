@@ -797,8 +797,9 @@ class EPGMigrationExtractor:
 
                             bgp_timers_policy = ''
                             for bgp_child in bgp_children:
-                                if 'bgpRsPeerPfxPol' in bgp_child:
-                                    bgp_timers_policy = bgp_child['bgpRsPeerPfxPol']['attributes'].get('tnBgpPeerPfxPolName', '')
+                                # BGP Timers Policy (bgpRsBgpNodeCtxPol -> tnBgpCtxPolName)
+                                if 'bgpRsBgpNodeCtxPol' in bgp_child:
+                                    bgp_timers_policy = bgp_child['bgpRsBgpNodeCtxPol']['attributes'].get('tnBgpCtxPolName', '')
 
                             self.found_l3out_bgp_protocol_profiles.append({
                                 'tenant': tenant_name,
