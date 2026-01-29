@@ -54,6 +54,7 @@ class FabricConverter:
         # Options supplémentaires
         self.disable_bd_routing = False
         self.vlan_descriptions = []  # Liste de tuples (vlan, description)
+        self.vlan_pool_descriptions = {}  # Dict {pool_name: description} pour auto-génération
 
         # Interface config data (pour mode config file)
         self.interface_config_enabled = False
@@ -754,6 +755,138 @@ class FabricConverter:
         else:
             print("   ℹ️  Le routage ne sera pas modifié")
 
+    def collect_vlan_pool_auto_descriptions(self):
+        """Auto-génère les descriptions des VLAN Pool basées sur le nom"""
+        print("\n" + "=" * 60)
+        print("📝 AUTO-GÉNÉRATION DES DESCRIPTIONS VLAN POOL")
+        print("=" * 60)
+
+        if 'vlan_pool' not in self.excel_data:
+            print("   ⚠️  Onglet vlan_pool non trouvé - étape ignorée")
+            return
+
+        print("Voulez-vous auto-générer les descriptions des VLAN Pools?")
+        print("Règles appliquées:")
+        print("   • Premier mot avant '-' ou '_' = nom du serveur")
+        print("   • Si contient P1 ou P2 → nom_SEGMENTS_VLAN")
+        print("   • Si contient P3 ou P4 (sans L3O) → nom_VTEP")
+        print("   • Si contient P3 ou P4 avec L3O → nom_L3OUT")
+        print("\nAuto-générer les descriptions? [o/N]: ", end="")
+        sys.stdout.flush()
+
+        response = input().strip().lower()
+        if response not in ['o', 'oui', 'y', 'yes']:
+            print("   ℹ️  Aucune modification des descriptions VLAN Pool")
+            return
+
+        vlan_pool_df = self.excel_data['vlan_pool']
+        columns_lower = [str(c).lower() for c in vlan_pool_df.columns]
+
+        # Trouver les colonnes pool et description
+        pool_col = None
+        desc_col = None
+        for col in ['pool', 'pool_name', 'name', 'vlan_pool']:
+            if col in columns_lower:
+                pool_col = vlan_pool_df.columns[columns_lower.index(col)]
+                break
+        for col in ['description', 'descr', 'desc']:
+            if col in columns_lower:
+                desc_col = vlan_pool_df.columns[columns_lower.index(col)]
+                break
+
+        if not pool_col:
+            print("   ⚠️  Colonne 'pool' non trouvée dans vlan_pool")
+            return
+        if not desc_col:
+            print("   ⚠️  Colonne 'description' non trouvée dans vlan_pool")
+            return
+
+        print("\n" + "-" * 60)
+        print("VLAN Pools détectés - Validez ou modifiez chaque description")
+        print("-" * 60)
+
+        import re
+        generated_descriptions = {}
+
+        for idx, row in vlan_pool_df.iterrows():
+            pool_name = str(row[pool_col]).strip()
+            if not pool_name or pool_name == 'nan':
+                continue
+
+            # Extraire le premier mot avant - ou _
+            match = re.match(r'^([^-_]+)', pool_name)
+            server_name = match.group(1) if match else pool_name
+
+            # Déterminer le type basé sur P1/P2/P3/P4/L3O
+            pool_upper = pool_name.upper()
+            has_p1_p2 = 'P1' in pool_upper or 'P2' in pool_upper
+            has_p3_p4 = 'P3' in pool_upper or 'P4' in pool_upper
+            has_l3o = 'L3O' in pool_upper
+
+            # Générer la description
+            if has_p3_p4 and has_l3o:
+                auto_desc = f"{server_name}_L3OUT"
+            elif has_p3_p4:
+                auto_desc = f"{server_name}_VTEP"
+            elif has_p1_p2:
+                auto_desc = f"{server_name}_SEGMENTS_VLAN"
+            else:
+                auto_desc = ""  # Pas de règle applicable
+
+            if auto_desc:
+                print(f"\n   Pool: {pool_name}")
+                print(f"   Description auto: {auto_desc}")
+                print(f"   → Confirmer ou modifier [{auto_desc}]: ", end="")
+                sys.stdout.flush()
+
+                user_input = input().strip()
+                final_desc = user_input if user_input else auto_desc
+                generated_descriptions[pool_name] = final_desc
+                print(f"   ✅ Description: {final_desc}")
+
+        if generated_descriptions:
+            self.vlan_pool_descriptions = generated_descriptions
+            print(f"\n✅ {len(generated_descriptions)} description(s) VLAN Pool configurée(s)")
+        else:
+            print("\n   ℹ️  Aucun VLAN Pool correspondant aux règles")
+
+    def apply_vlan_pool_descriptions(self):
+        """Applique les descriptions auto-générées aux VLAN Pools"""
+        if not self.vlan_pool_descriptions:
+            return 0
+
+        if 'vlan_pool' not in self.excel_data:
+            return 0
+
+        vlan_pool_df = self.excel_data['vlan_pool']
+        columns_lower = [str(c).lower() for c in vlan_pool_df.columns]
+
+        pool_col = None
+        desc_col = None
+        for col in ['pool', 'pool_name', 'name', 'vlan_pool']:
+            if col in columns_lower:
+                pool_col = vlan_pool_df.columns[columns_lower.index(col)]
+                break
+        for col in ['description', 'descr', 'desc']:
+            if col in columns_lower:
+                desc_col = vlan_pool_df.columns[columns_lower.index(col)]
+                break
+
+        if not pool_col or not desc_col:
+            return 0
+
+        count = 0
+        for pool_name, description in self.vlan_pool_descriptions.items():
+            mask = vlan_pool_df[pool_col] == pool_name
+            if mask.any():
+                vlan_pool_df.loc[mask, desc_col] = description
+                count += 1
+
+        if count > 0:
+            print(f"   ✅ {count} description(s) VLAN Pool appliquée(s)")
+
+        return count
+
     def collect_vlan_descriptions(self):
         """Collecte les descriptions à modifier basées sur VLAN"""
         print("\n" + "=" * 60)
@@ -993,6 +1126,42 @@ class FabricConverter:
 
         print(f"   ✅ Routage désactivé pour {count} Bridge Domain(s)")
         return count
+
+    def create_routing_enable_excel(self):
+        """Crée un fichier Excel pour réactiver le routage des BD"""
+        if not self.disable_bd_routing:
+            return
+
+        if 'bd' not in self.excel_data:
+            return
+
+        # Nom du fichier: BD-{nom_original}-routing_enable.xlsx
+        excel_path = Path(self.excel_file)
+        routing_enable_file = str(excel_path.parent / f"BD-{excel_path.stem}-routing_enable.xlsx")
+
+        bd_df = self.excel_data['bd'].copy()
+        columns_lower = [str(c).lower() for c in bd_df.columns]
+
+        # Trouver la colonne enable_routing
+        routing_col = None
+        for col in ['enable_routing', 'unicast_route', 'routing']:
+            if col in columns_lower:
+                routing_col = bd_df.columns[columns_lower.index(col)]
+                break
+
+        if not routing_col:
+            print("   ⚠️  Impossible de créer le fichier routing_enable - colonne non trouvée")
+            return
+
+        # Mettre toutes les valeurs à true
+        bd_df[routing_col] = 'true'
+
+        # Créer le fichier Excel avec seulement l'onglet bd
+        with pd.ExcelWriter(routing_enable_file, engine='openpyxl') as writer:
+            bd_df.to_excel(writer, sheet_name='bd', index=False)
+
+        print(f"   📁 Fichier routing_enable créé: {routing_enable_file}")
+        print(f"      → Utilisez ce fichier pour réactiver le routage après les travaux")
 
     def collect_interface_config_mappings(self):
         """Collecte les mappings pour convertir Interface Profile → Interface Config"""
@@ -1801,6 +1970,9 @@ class FabricConverter:
         # 5. Collecte option désactivation routage BD
         self.collect_bd_routing_option()
 
+        # 5b. Collecte auto-génération descriptions VLAN Pool
+        self.collect_vlan_pool_auto_descriptions()
+
         # 6. Collecte des descriptions par VLAN
         self.collect_vlan_descriptions()
 
@@ -1830,6 +2002,13 @@ class FabricConverter:
             print("🔀 DÉSACTIVATION DU ROUTAGE BD")
             print("=" * 60)
             self.apply_bd_routing_disable()
+            self.create_routing_enable_excel()
+
+        if self.vlan_pool_descriptions:
+            print("\n" + "=" * 60)
+            print("📝 APPLICATION DES DESCRIPTIONS VLAN POOL")
+            print("=" * 60)
+            self.apply_vlan_pool_descriptions()
 
         if self.vlan_descriptions:
             self.apply_vlan_descriptions()
@@ -1877,6 +2056,13 @@ class FabricConverter:
             print("🔀 DÉSACTIVATION DU ROUTAGE BD")
             print("=" * 60)
             self.apply_bd_routing_disable()
+            self.create_routing_enable_excel()
+
+        if self.vlan_pool_descriptions:
+            print("\n" + "=" * 60)
+            print("📝 APPLICATION DES DESCRIPTIONS VLAN POOL")
+            print("=" * 60)
+            self.apply_vlan_pool_descriptions()
 
         if self.vlan_descriptions:
             self.apply_vlan_descriptions()
@@ -1903,6 +2089,7 @@ class FabricConverter:
         print("\n   [1] Wizard interactif (étape par étape)")
         print("   [2] Fichier de configuration (texte plat)")
         print("\nChoix [1]: ", end="")
+        sys.stdout.flush()
         mode = input().strip()
 
         if mode == '2':
@@ -1945,6 +2132,7 @@ def main():
 
     # Demander le fichier Excel source
     print("📁 Fichier Excel source: ", end="")
+    sys.stdout.flush()
     excel_file = input().strip()
 
     if not excel_file:
