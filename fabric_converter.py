@@ -885,6 +885,120 @@ class FabricConverter:
 
         return count
 
+    def collect_encap_block_split(self):
+        """Split les VLAN encap blocks en ranges vers des VLANs individuels"""
+        print("\n" + "=" * 60)
+        print("📋 SPLIT DES VLAN POOL ENCAP BLOCKS")
+        print("=" * 60)
+
+        if 'vlan_pool_encap_block' not in self.excel_data:
+            print("   ⚠️  Onglet vlan_pool_encap_block non trouvé - étape ignorée")
+            return
+
+        encap_df = self.excel_data['vlan_pool_encap_block']
+        columns_lower = [str(c).lower() for c in encap_df.columns]
+
+        # Trouver les colonnes
+        start_col = None
+        end_col = None
+        pool_col = None
+        mode_col = None
+        desc_col = None
+
+        for col in ['block_start', 'start', 'from']:
+            if col in columns_lower:
+                start_col = encap_df.columns[columns_lower.index(col)]
+                break
+        for col in ['block_end', 'end', 'to']:
+            if col in columns_lower:
+                end_col = encap_df.columns[columns_lower.index(col)]
+                break
+        for col in ['pool', 'pool_name', 'vlan_pool']:
+            if col in columns_lower:
+                pool_col = encap_df.columns[columns_lower.index(col)]
+                break
+        for col in ['pool_allocation_mode', 'allocation_mode', 'mode']:
+            if col in columns_lower:
+                mode_col = encap_df.columns[columns_lower.index(col)]
+                break
+        for col in ['description', 'descr', 'desc']:
+            if col in columns_lower:
+                desc_col = encap_df.columns[columns_lower.index(col)]
+                break
+
+        if not start_col or not end_col:
+            print("   ⚠️  Colonnes block_start/block_end non trouvées")
+            return
+
+        # Détecter les ranges (block_start != block_end)
+        ranges_found = []
+        for idx, row in encap_df.iterrows():
+            try:
+                start = int(row[start_col])
+                end = int(row[end_col])
+                if start != end:
+                    pool_name = row[pool_col] if pool_col else 'Unknown'
+                    vlan_count = end - start + 1
+                    ranges_found.append({
+                        'idx': idx,
+                        'pool': pool_name,
+                        'start': start,
+                        'end': end,
+                        'count': vlan_count
+                    })
+            except (ValueError, TypeError):
+                continue
+
+        if not ranges_found:
+            print("   ℹ️  Aucun range détecté - tous les encap blocks sont déjà individuels")
+            return
+
+        print("Voulez-vous splitter les ranges en VLANs individuels?")
+        print("Cela permet d'appliquer une description différente par VLAN.\n")
+        print("Pools avec ranges détectés:")
+        total_vlans = 0
+        for r in ranges_found:
+            print(f"   • {r['pool']}: {r['start']}-{r['end']} ({r['count']} VLANs)")
+            total_vlans += r['count']
+        print(f"\n   Total: {total_vlans} VLANs seront créés")
+
+        print("\nSplitter les ranges? [o/N]: ", end="", flush=True)
+        response = input().strip().lower()
+
+        if response not in ['o', 'oui', 'y', 'yes']:
+            print("   ℹ️  Les ranges ne seront pas splittés")
+            return
+
+        # Créer les nouvelles lignes
+        print(f"\n🔄 Split en cours...")
+        new_rows = []
+
+        for idx, row in encap_df.iterrows():
+            try:
+                start = int(row[start_col])
+                end = int(row[end_col])
+            except (ValueError, TypeError):
+                new_rows.append(row.to_dict())
+                continue
+
+            if start == end:
+                # Pas un range, garder tel quel
+                new_rows.append(row.to_dict())
+            else:
+                # Splitter le range
+                for vlan in range(start, end + 1):
+                    new_row = row.to_dict()
+                    new_row[start_col] = vlan
+                    new_row[end_col] = vlan
+                    new_rows.append(new_row)
+
+        # Remplacer le DataFrame
+        new_df = pd.DataFrame(new_rows)
+        self.excel_data['vlan_pool_encap_block'] = new_df
+
+        print(f"   ✅ {len(ranges_found)} range(s) splittés en {len(new_df)} lignes individuelles")
+        print(f"   📝 Vous pourrez maintenant appliquer des descriptions par VLAN")
+
     def collect_vlan_descriptions(self):
         """Collecte les descriptions à modifier basées sur VLAN"""
         print("\n" + "=" * 60)
@@ -1979,6 +2093,9 @@ class FabricConverter:
 
         # 5b. Collecte auto-génération descriptions VLAN Pool
         self.collect_vlan_pool_auto_descriptions()
+
+        # 5c. Split des VLAN encap blocks (ranges → individuels)
+        self.collect_encap_block_split()
 
         # 6. Collecte des descriptions par VLAN
         self.collect_vlan_descriptions()
