@@ -1265,17 +1265,17 @@ class FabricConverter:
             print("   ⚠️  Impossible de créer le fichier routing_enable - colonne non trouvée")
             return
 
-        # Supprimer les colonnes inutiles (description, arp_flooding, unknown_unicast)
+        # Supprimer les colonnes inutiles (description, arp_flooding, l2_unknown_unicast)
         columns_to_drop = []
         for col in bd_df.columns:
             col_lower = str(col).lower()
-            if col_lower in ['description', 'descr', 'desc', 'arp_flooding', 'unknown_unicast']:
+            if col_lower in ['description', 'descr', 'desc', 'arp_flooding', 'l2_unknown_unicast', 'unknown_unicast']:
                 columns_to_drop.append(col)
         if columns_to_drop:
             bd_df = bd_df.drop(columns=columns_to_drop)
 
-        # Mettre toutes les valeurs à VRAI (majuscule pour correspondre à extract_migration.py)
-        bd_df[routing_col] = 'VRAI'
+        # Mettre toutes les valeurs à true (format Ansible standard)
+        bd_df[routing_col] = 'true'
 
         # Créer le fichier Excel avec seulement l'onglet bd
         with pd.ExcelWriter(routing_enable_file, engine='openpyxl') as writer:
