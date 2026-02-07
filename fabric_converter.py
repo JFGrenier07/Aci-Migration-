@@ -13,6 +13,7 @@ V4:
 """
 
 import os
+import re
 import sys
 import yaml
 import pandas as pd
@@ -1285,6 +1286,163 @@ class FabricConverter:
         print(f"   📁 Fichier routing_enable créé: {routing_enable_file}")
         print(f"      → Utilisez ce fichier pour réactiver le routage après les travaux")
 
+    def _extract_leaf_ids_from_profile(self, profile_name):
+        """
+        Extrait les identifiants de leaf d'un nom d'Interface Profile.
+
+        Patterns supportés:
+        - SF22-121-LIP → ['121'] (single leaf)
+        - SF22-121-122-LIP → ['121', '122'] (VPC)
+        - SF22-121-22-LIP → ['121', '22'] (VPC format court)
+
+        Args:
+            profile_name: Nom du profile (ex: SF22-121-LIP)
+
+        Returns:
+            Liste des identifiants de leaf, ou None si pattern non reconnu
+        """
+        # Enlever le suffixe -LIP
+        if not profile_name.upper().endswith('-LIP'):
+            return None
+
+        base_name = profile_name[:-4]  # Enlever -LIP
+
+        # Pattern: FABRIC-LEAF ou FABRIC-LEAF1-LEAF2
+        # Ex: SF22-121 ou SF22-121-122 ou SF22-121-22
+        parts = base_name.split('-')
+
+        if len(parts) < 2:
+            return None
+
+        # Le premier élément est le fabric (SF22), les suivants sont les leafs
+        leaf_ids = []
+        for part in parts[1:]:
+            # Vérifier si c'est un nombre (leaf id)
+            if part.isdigit():
+                leaf_ids.append(part)
+
+        return leaf_ids if leaf_ids else None
+
+    def _auto_map_profiles_to_nodes(self, interface_profiles, available_node_ids, is_vpc=False):
+        """
+        Auto-mappe les Interface Profiles aux Node IDs.
+
+        Logique:
+        - Extraire les leaf IDs de chaque profile
+        - Trier tous les leaf IDs uniques
+        - Mapper au node_ids triés (plus petit → plus petit)
+
+        Args:
+            interface_profiles: Liste des noms de profiles
+            available_node_ids: Liste des node_ids disponibles
+            is_vpc: True si VPC (profiles avec 2 leafs)
+
+        Returns:
+            Dict {profile_name: node_id} pour single leaf
+            Dict {profile_name: [node_id1, node_id2]} pour VPC
+            Ou None si échec
+        """
+        # Extraire tous les leaf IDs et leur association avec les profiles
+        profile_leaf_map = {}  # profile -> list of leaf_ids
+        all_leaf_ids = set()
+
+        for profile in interface_profiles:
+            leaf_ids = self._extract_leaf_ids_from_profile(profile)
+            if leaf_ids:
+                profile_leaf_map[profile] = leaf_ids
+                all_leaf_ids.update(leaf_ids)
+
+        if not all_leaf_ids:
+            return None
+
+        # Trier les leaf IDs numériquement
+        sorted_leaf_ids = sorted(all_leaf_ids, key=lambda x: int(x))
+
+        # Trier les node_ids
+        sorted_node_ids = sorted([str(n) for n in available_node_ids])
+
+        # Créer le mapping leaf_id → node_id
+        leaf_to_node = {}
+        for i, leaf_id in enumerate(sorted_leaf_ids):
+            if i < len(sorted_node_ids):
+                leaf_to_node[leaf_id] = sorted_node_ids[i]
+
+        # Créer le mapping profile → node(s)
+        profile_to_node = {}
+        for profile, leaf_ids in profile_leaf_map.items():
+            if is_vpc and len(leaf_ids) >= 2:
+                # VPC: mapper les 2 leafs aux 2 nodes
+                nodes = []
+                for lid in sorted(leaf_ids, key=lambda x: int(x)):
+                    if lid in leaf_to_node:
+                        nodes.append(leaf_to_node[lid])
+                if len(nodes) == 2:
+                    profile_to_node[profile] = nodes
+            else:
+                # Single leaf: mapper à 1 node
+                if leaf_ids[0] in leaf_to_node:
+                    profile_to_node[profile] = leaf_to_node[leaf_ids[0]]
+
+        return profile_to_node, leaf_to_node
+
+    def _display_and_confirm_mapping(self, profile_to_node, is_vpc=False):
+        """
+        Affiche le mapping auto-détecté et permet la modification.
+
+        Args:
+            profile_to_node: Dict du mapping profile → node(s)
+            is_vpc: True si VPC
+
+        Returns:
+            Dict modifié du mapping
+        """
+        print("\n" + "-" * 60)
+        print("🔄 AUTO-MAPPING INTERFACE PROFILE → NODE ID")
+        print("-" * 60)
+
+        # Afficher le mapping avec numéros
+        profiles_list = list(profile_to_node.keys())
+        for i, profile in enumerate(profiles_list, 1):
+            node_val = profile_to_node[profile]
+            if isinstance(node_val, list):
+                print(f"   {i}. {profile} → {', '.join(node_val)} (VPC)")
+            else:
+                print(f"   {i}. {profile} → {node_val}")
+
+        # Permettre la modification
+        while True:
+            print(f"\nModifier un mapping? Entrez le numéro (1-{len(profiles_list)}) ou Entrée pour continuer: ", end="", flush=True)
+            choice = input().strip()
+
+            if not choice:
+                break
+
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(profiles_list):
+                    profile = profiles_list[idx]
+                    current = profile_to_node[profile]
+
+                    if isinstance(current, list):
+                        print(f"   Nouveaux Node IDs pour {profile} (séparés par virgule) [{', '.join(current)}]: ", end="", flush=True)
+                        new_val = input().strip()
+                        if new_val:
+                            new_nodes = [n.strip() for n in new_val.split(',')]
+                            profile_to_node[profile] = new_nodes
+                            print(f"   ✅ Modifié: {profile} → {', '.join(new_nodes)}")
+                    else:
+                        print(f"   Nouveau Node ID pour {profile} [{current}]: ", end="", flush=True)
+                        new_val = input().strip()
+                        if new_val:
+                            profile_to_node[profile] = new_val
+                            print(f"   ✅ Modifié: {profile} → {new_val}")
+                else:
+                    print("   ⚠️  Numéro invalide")
+            except ValueError:
+                print("   ⚠️  Entrée invalide")
+
+        return profile_to_node
+
     def _detect_policy_groups(self, access_port_df):
         """
         Détecte les policy groups P1_P2, P3, P4 depuis les données existantes.
@@ -1332,7 +1490,7 @@ class FabricConverter:
         - Ports PAIRS (grosse leaf/node) → P4-IPG
 
         Args:
-            profile_to_node: Dict {interface_profile: node_id}
+            profile_to_node: Dict {interface_profile: node_id} ou {profile: [node1, node2]} pour VPC
             interface_type: 'switch_port' ou 'pc_or_vpc'
             access_port_df: DataFrame access_port_to_int_policy_leaf
 
@@ -1347,7 +1505,7 @@ class FabricConverter:
         cluster_name, ipg_p1p2, ipg_p3, ipg_p4 = self._detect_policy_groups(access_port_df)
 
         if ipg_p1p2 and ipg_p3 and ipg_p4:
-            print(f"\n✅ Policy Groups détectés automatiquement:")
+            print(f"\n✅ Policy Groups détectés:")
             print(f"   • Cluster: {cluster_name}")
             print(f"   • P1_P2-IPG (impairs): {ipg_p1p2}")
             print(f"   • P3-IPG (pairs petite leaf): {ipg_p3}")
@@ -1372,39 +1530,24 @@ class FabricConverter:
             print(f"   • P3-IPG: {ipg_p3}")
             print(f"   • P4-IPG: {ipg_p4}")
 
-        # 2. Mapping Node ID → Nom de Leaf
-        print("\n" + "-" * 60)
-        print("🏷️  MAPPING NODE ID → NOM DE LEAF")
-        print("-" * 60)
-        print("\n💡 Important pour grappes multi-serveurs (2, 4, 6, 8 leafs):")
-        print("   Les leafs seront triées par nom pour déterminer petite/grosse")
-
-        unique_nodes = list(set(profile_to_node.values()))
-        node_to_leaf = {}
-
-        for node in sorted(unique_nodes):
-            print(f"\n   Node '{node}' → Nom de Leaf (ex: SFXX-XXX): ", end="", flush=True)
-            leaf_name = input().strip().upper()
-            if leaf_name:
-                node_to_leaf[node] = leaf_name
+        # 2. Collecter les node_ids depuis profile_to_node
+        all_nodes = set()
+        for val in profile_to_node.values():
+            if isinstance(val, list):
+                all_nodes.update(val)
             else:
-                print(f"      ⚠️  Nom vide, ce node sera ignoré")
+                all_nodes.add(val)
+        sorted_nodes = sorted([str(n) for n in all_nodes])
 
-        if not node_to_leaf:
-            print("❌ Aucun mapping node → leaf défini")
-            return None
-
-        # Créer le mapping inverse: leaf_name → node_id
-        leaf_to_node = {v: k for k, v in node_to_leaf.items()}
-
-        # 3. Collecter les descriptions d'interfaces
+        # 3. Collecter les descriptions d'interfaces (DIRECTEMENT)
         print("\n" + "-" * 60)
         print("📋 DESCRIPTIONS DES INTERFACES")
         print("-" * 60)
         print("\nFormat: LEAF_NAME  PORT_NUMBER  DESCRIPTION")
-        print("Exemple: SF22-121  3  SERVER101-vmnic2")
-        print("\n💡 Le mapping leaf ↔ node sera automatique:")
-        print("   Plus petit nom de leaf = plus petit node_id")
+        print("Exemple: SFXX-XXX  3  SERVER101-vmnic2")
+        print("\n💡 Les leafs seront auto-mappées aux node_ids:")
+        print(f"   Node IDs disponibles: {', '.join(sorted_nodes)}")
+        print("   Plus petit nom de leaf → plus petit node_id")
         print("-" * 60)
         print("Collez vos lignes puis appuyez 2 fois sur Entrée:\n")
 
@@ -1429,8 +1572,7 @@ class FabricConverter:
 
         print(f"\n   ✅ {len(description_lines)} lignes reçues")
 
-        # 4. Parser les descriptions et extraire les interfaces
-        parsed_interfaces = []
+        # 4. Parser les descriptions et extraire les leafs
         leaf_data = {}  # leaf_name -> list of (port, description)
 
         for line in description_lines:
@@ -1450,18 +1592,22 @@ class FabricConverter:
                 leaf_data[leaf_name] = []
             leaf_data[leaf_name].append((port_num, description))
 
-        # 5. Trier les leafs et créer le mapping automatique
-        # Plus petit nom de leaf → plus petit node_id
-        sorted_leaves = sorted(leaf_data.keys())
-        sorted_nodes = sorted([str(n) for n in node_to_leaf.keys()])
+        if not leaf_data:
+            print("❌ Aucune interface parsée")
+            return None
 
-        # Recréer le mapping basé sur le tri
+        # 5. Auto-mapping: trier les leafs et mapper aux node_ids triés
+        sorted_leaves = sorted(leaf_data.keys())
+
+        print(f"\n🔍 Leafs détectées: {', '.join(sorted_leaves)}")
+
+        # Créer le mapping automatique
         auto_leaf_to_node = {}
         for i, leaf in enumerate(sorted_leaves):
             if i < len(sorted_nodes):
                 auto_leaf_to_node[leaf] = sorted_nodes[i]
 
-        print(f"\n   Mapping automatique leaf → node:")
+        print(f"\n   Auto-mapping leaf → node:")
         for leaf, node in auto_leaf_to_node.items():
             print(f"   • {leaf} → {node}")
 
@@ -1481,10 +1627,6 @@ class FabricConverter:
 
         for leaf_name, ports_data in leaf_data.items():
             node_id = auto_leaf_to_node.get(leaf_name)
-
-            if not node_id:
-                # Essayer de matcher avec leaf_to_node original
-                node_id = leaf_to_node.get(leaf_name)
 
             if not node_id:
                 print(f"   ⚠️  Leaf '{leaf_name}' non mappée, ignorée")
@@ -1607,24 +1749,7 @@ class FabricConverter:
         for ip in interface_profiles:
             print(f"   • {ip}")
 
-        # 2. Mapping Interface Profile → Node ID
-        print("\n" + "-" * 60)
-        print("📍 MAPPING INTERFACE PROFILE → NODE ID")
-        print("-" * 60)
-        profile_to_node = {}
-        for profile in interface_profiles:
-            print(f"\n'{profile}' → Entrez le Node ID: ", end="", flush=True)
-            node_id = input().strip()
-            if node_id:
-                profile_to_node[profile] = node_id
-            else:
-                print(f"   ⚠️  Node ID vide, ce profile sera ignoré")
-
-        if not profile_to_node:
-            print("❌ Aucun mapping défini, conversion ignorée")
-            return
-
-        # 3. Demander le type d'interface
+        # 2. Demander le type d'interface (AVANT le mapping pour déterminer si VPC)
         print("\n" + "-" * 60)
         print("🔧 TYPE D'INTERFACE")
         print("-" * 60)
@@ -1635,10 +1760,69 @@ class FabricConverter:
 
         if type_choice == '2':
             interface_type = 'pc_or_vpc'
+            is_vpc = True
             print("   → Type sélectionné: pc_or_vpc")
         else:
             interface_type = 'switch_port'
+            is_vpc = False
             print("   → Type sélectionné: switch_port")
+
+        # 3. Auto-mapping Interface Profile → Node ID
+        # Récupérer les node_ids depuis les mappings L3Out (déjà entrés)
+        available_node_ids = list(self.node_id_mapping.values()) if self.node_id_mapping else []
+
+        if not available_node_ids:
+            # Fallback: demander les node_ids
+            print("\n" + "-" * 60)
+            print("📍 NODE IDs DISPONIBLES")
+            print("-" * 60)
+            print("Entrez les Node IDs séparés par virgule (ex: 2221, 2222): ", end="", flush=True)
+            node_input = input().strip()
+            if node_input:
+                available_node_ids = [n.strip() for n in node_input.split(',')]
+
+        if not available_node_ids:
+            print("❌ Aucun Node ID disponible")
+            return
+
+        print(f"\n   Node IDs disponibles: {', '.join(available_node_ids)}")
+
+        # Tenter l'auto-mapping
+        auto_result = self._auto_map_profiles_to_nodes(interface_profiles, available_node_ids, is_vpc)
+
+        if auto_result:
+            profile_to_node, leaf_to_node_mapping = auto_result
+            print(f"\n✅ Auto-mapping réussi ({len(profile_to_node)} profiles)")
+
+            # Afficher et permettre la modification
+            profile_to_node = self._display_and_confirm_mapping(profile_to_node, is_vpc)
+        else:
+            # Fallback: mapping manuel
+            print("\n⚠️  Auto-mapping impossible (pattern non reconnu)")
+            print("   → Passage en mode manuel")
+
+            print("\n" + "-" * 60)
+            print("📍 MAPPING INTERFACE PROFILE → NODE ID")
+            print("-" * 60)
+            profile_to_node = {}
+            for profile in interface_profiles:
+                if is_vpc:
+                    print(f"\n'{profile}' → Node IDs (séparés par virgule): ", end="", flush=True)
+                    node_input = input().strip()
+                    if node_input:
+                        nodes = [n.strip() for n in node_input.split(',')]
+                        profile_to_node[profile] = nodes if len(nodes) > 1 else nodes[0]
+                else:
+                    print(f"\n'{profile}' → Node ID: ", end="", flush=True)
+                    node_id = input().strip()
+                    if node_id:
+                        profile_to_node[profile] = node_id
+                    else:
+                        print(f"   ⚠️  Node ID vide, ce profile sera ignoré")
+
+        if not profile_to_node:
+            print("❌ Aucun mapping défini, conversion ignorée")
+            return
 
         # 3b. Méthode d'assignation des interfaces
         print("\n" + "-" * 60)
@@ -1706,16 +1890,24 @@ class FabricConverter:
         interface_mappings = []
 
         for (profile, policy_group), data in grouped.items():
-            node_id = profile_to_node[profile]
+            node_val = profile_to_node[profile]
             interfaces = data['interfaces']
             access_port_selector = data['access_port_selector']
             description = data['description']
+
+            # Déterminer si VPC (liste de nodes) ou single (string)
+            if isinstance(node_val, list):
+                node_display = ', '.join(node_val)
+                node_list = node_val
+            else:
+                node_display = node_val
+                node_list = [node_val]
 
             print(f"\n{'='*60}")
             print(f"📌 Interface Profile: {profile}")
             print(f"   Access Port Selector: {access_port_selector}")
             print(f"   Policy Group: {policy_group}")
-            print(f"   Node destination: {node_id}")
+            print(f"   Node destination: {node_display}" + (" (VPC)" if len(node_list) > 1 else ""))
             print(f"\n   Interfaces actuelles:")
             for iface in sorted(interfaces, key=lambda x: int(x.split('/')[1]) if '/' in x else 0):
                 print(f"      • {iface}")
@@ -1738,17 +1930,19 @@ class FabricConverter:
             else:
                 new_interfaces = interfaces
 
-            for iface in new_interfaces:
-                interface_mappings.append({
-                    'node': node_id,
-                    'interface': iface,
-                    'policy_group': policy_group,
-                    'role': 'leaf',
-                    'port_type': 'access',
-                    'interface_type': interface_type,
-                    'admin_state': 'up',
-                    'description': description
-                })
+            # Créer les entrées - pour VPC, créer une entrée par node
+            for node_id in node_list:
+                for iface in new_interfaces:
+                    interface_mappings.append({
+                        'node': node_id,
+                        'interface': iface,
+                        'policy_group': policy_group,
+                        'role': 'leaf',
+                        'port_type': 'access',
+                        'interface_type': interface_type,
+                        'admin_state': 'up',
+                        'description': description
+                    })
 
         # 6. Mapping des descriptions personnalisées
         if interface_mappings:
