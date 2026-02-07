@@ -1383,7 +1383,7 @@ class FabricConverter:
         node_to_leaf = {}
 
         for node in sorted(unique_nodes):
-            print(f"\n   Node '{node}' → Nom de Leaf (ex: SF22-127): ", end="", flush=True)
+            print(f"\n   Node '{node}' → Nom de Leaf (ex: SFXX-XXX): ", end="", flush=True)
             leaf_name = input().strip().upper()
             if leaf_name:
                 node_to_leaf[node] = leaf_name
@@ -1769,7 +1769,7 @@ class FabricConverter:
                 node_to_leaf = {}
 
                 for node in sorted(unique_nodes):
-                    print(f"\n   Node '{node}' → Nom de Leaf (ex: SF22-127): ", end="", flush=True)
+                    print(f"\n   Node '{node}' → Nom de Leaf (ex: SFXX-XXX): ", end="", flush=True)
                     leaf_name = input().strip().upper()
                     if leaf_name:
                         node_to_leaf[node] = leaf_name
@@ -1783,7 +1783,7 @@ class FabricConverter:
                     print("-" * 60)
                     print("\n   Format attendu par ligne:")
                     print("   {NOM_LEAF} {ESPACE(S)} {NO_INTERFACE} {ESPACE(S)} {DESCRIPTION}")
-                    print("   Exemple: SF22-127  3  VPZESX1011-onb2-p1-vmnic2")
+                    print("   Exemple: SFXX-XXX  3  VPZESX1011-onb2-p1-vmnic2")
                     print("\n   Collez votre liste puis appuyez 2 fois sur Entrée pour terminer:")
                     print("-" * 60)
 
@@ -2043,14 +2043,14 @@ class FabricConverter:
         # INTERFACE_CONFIG_NODE_TO_LEAF
         lines.append("[INTERFACE_CONFIG_NODE_TO_LEAF]")
         lines.append("# Format: node_id = nom_leaf")
-        lines.append("# Exemple: 201 = SF22-127")
+        lines.append("# Exemple: 201 = SFXX-XXX")
         lines.append("# (Utilise pour les descriptions personnalisees)")
         lines.append("")
 
         # INTERFACE_CONFIG_DESCRIPTIONS
         lines.append("[INTERFACE_CONFIG_DESCRIPTIONS]")
         lines.append("# Meme format que le wizard: NOM_LEAF  NO_INTERFACE  DESCRIPTION")
-        lines.append("# Exemple: SF22-127  3  VPZESX1011-onb2-p1-vmnic2")
+        lines.append("# Exemple: SFXX-XXX  3  VPZESX1011-onb2-p1-vmnic2")
         lines.append("# Collez vos lignes, 2 entrees vides = fin")
         lines.append("")
 
