@@ -58,6 +58,7 @@ class FabricConverter:
 
         # Interface config data (pour mode config file)
         self.interface_config_enabled = False
+        self.interface_config_method = 'odd_even'  # 'odd_even' ou 'manual'
         self.interface_config_type = 'switch_port'
         self.interface_config_profile_to_node = {}
         self.interface_config_interfaces = []  # Liste de (profile, policy_group, interfaces_str)
@@ -1284,6 +1285,297 @@ class FabricConverter:
         print(f"   📁 Fichier routing_enable créé: {routing_enable_file}")
         print(f"      → Utilisez ce fichier pour réactiver le routage après les travaux")
 
+    def _detect_policy_groups(self, access_port_df):
+        """
+        Détecte les policy groups P1_P2, P3, P4 depuis les données existantes.
+
+        Cherche les patterns:
+        - {CLUSTER}-P1_P2-IPG → P1_P2 (ports impairs, les 2 leafs)
+        - {CLUSTER}-P3-IPG → P3 (ports pairs, petite leaf)
+        - {CLUSTER}-P4-IPG → P4 (ports pairs, grosse leaf)
+
+        Returns:
+            Tuple (cluster_name, ipg_p1p2, ipg_p3, ipg_p4) ou (None, None, None, None) si non détecté
+        """
+        policy_groups = access_port_df['policy_group'].dropna().unique().tolist()
+
+        # Chercher les patterns
+        ipg_p1p2 = None
+        ipg_p3 = None
+        ipg_p4 = None
+        cluster_name = None
+
+        for pg in policy_groups:
+            pg_upper = str(pg).upper()
+            if '-P1_P2-IPG' in pg_upper:
+                ipg_p1p2 = pg
+                # Extraire le cluster name
+                idx = pg_upper.index('-P1_P2-IPG')
+                cluster_name = pg[:idx]
+            elif '-P3-IPG' in pg_upper:
+                ipg_p3 = pg
+            elif '-P4-IPG' in pg_upper:
+                ipg_p4 = pg
+
+        if ipg_p1p2 and ipg_p3 and ipg_p4:
+            return (cluster_name, ipg_p1p2, ipg_p3, ipg_p4)
+
+        return (None, None, None, None)
+
+    def _collect_odd_even_interfaces(self, profile_to_node, interface_type, access_port_df):
+        """
+        Collecte les interfaces avec la logique paire/impaire.
+
+        Règles:
+        - Ports IMPAIRS → P1_P2-IPG (les 2 leafs)
+        - Ports PAIRS (petite leaf/node) → P3-IPG
+        - Ports PAIRS (grosse leaf/node) → P4-IPG
+
+        Args:
+            profile_to_node: Dict {interface_profile: node_id}
+            interface_type: 'switch_port' ou 'pc_or_vpc'
+            access_port_df: DataFrame access_port_to_int_policy_leaf
+
+        Returns:
+            Liste de dicts pour interface_config ou None si échec
+        """
+        print("\n" + "-" * 60)
+        print("📐 LOGIQUE PAIRE/IMPAIRE")
+        print("-" * 60)
+
+        # 1. Détecter les policy groups
+        cluster_name, ipg_p1p2, ipg_p3, ipg_p4 = self._detect_policy_groups(access_port_df)
+
+        if ipg_p1p2 and ipg_p3 and ipg_p4:
+            print(f"\n✅ Policy Groups détectés automatiquement:")
+            print(f"   • Cluster: {cluster_name}")
+            print(f"   • P1_P2-IPG (impairs): {ipg_p1p2}")
+            print(f"   • P3-IPG (pairs petite leaf): {ipg_p3}")
+            print(f"   • P4-IPG (pairs grosse leaf): {ipg_p4}")
+        else:
+            # Demander le nom du cluster
+            print("\n⚠️  Policy Groups non détectés automatiquement")
+            print("\nEntrez le nom du cluster (ex: SERVER106): ", end="", flush=True)
+            cluster_name = input().strip().upper()
+
+            if not cluster_name:
+                print("❌ Nom de cluster requis")
+                return None
+
+            # Générer les noms de policy groups
+            ipg_p1p2 = f"{cluster_name}-P1_P2-IPG"
+            ipg_p3 = f"{cluster_name}-P3-IPG"
+            ipg_p4 = f"{cluster_name}-P4-IPG"
+
+            print(f"\n   Policy Groups générés:")
+            print(f"   • P1_P2-IPG: {ipg_p1p2}")
+            print(f"   • P3-IPG: {ipg_p3}")
+            print(f"   • P4-IPG: {ipg_p4}")
+
+        # 2. Mapping Node ID → Nom de Leaf
+        print("\n" + "-" * 60)
+        print("🏷️  MAPPING NODE ID → NOM DE LEAF")
+        print("-" * 60)
+        print("\n💡 Important pour grappes multi-serveurs (2, 4, 6, 8 leafs):")
+        print("   Les leafs seront triées par nom pour déterminer petite/grosse")
+
+        unique_nodes = list(set(profile_to_node.values()))
+        node_to_leaf = {}
+
+        for node in sorted(unique_nodes):
+            print(f"\n   Node '{node}' → Nom de Leaf (ex: SF22-127): ", end="", flush=True)
+            leaf_name = input().strip().upper()
+            if leaf_name:
+                node_to_leaf[node] = leaf_name
+            else:
+                print(f"      ⚠️  Nom vide, ce node sera ignoré")
+
+        if not node_to_leaf:
+            print("❌ Aucun mapping node → leaf défini")
+            return None
+
+        # Créer le mapping inverse: leaf_name → node_id
+        leaf_to_node = {v: k for k, v in node_to_leaf.items()}
+
+        # 3. Collecter les descriptions d'interfaces
+        print("\n" + "-" * 60)
+        print("📋 DESCRIPTIONS DES INTERFACES")
+        print("-" * 60)
+        print("\nFormat: LEAF_NAME  PORT_NUMBER  DESCRIPTION")
+        print("Exemple: SF22-121  3  SERVER101-vmnic2")
+        print("\n💡 Le mapping leaf ↔ node sera automatique:")
+        print("   Plus petit nom de leaf = plus petit node_id")
+        print("-" * 60)
+        print("Collez vos lignes puis appuyez 2 fois sur Entrée:\n")
+
+        description_lines = []
+        empty_line_count = 0
+        while True:
+            try:
+                line = input()
+                if not line.strip():
+                    empty_line_count += 1
+                    if empty_line_count >= 2:
+                        break
+                else:
+                    empty_line_count = 0
+                    description_lines.append(line.strip())
+            except EOFError:
+                break
+
+        if not description_lines:
+            print("❌ Aucune description fournie")
+            return None
+
+        print(f"\n   ✅ {len(description_lines)} lignes reçues")
+
+        # 4. Parser les descriptions et extraire les interfaces
+        parsed_interfaces = []
+        leaf_data = {}  # leaf_name -> list of (port, description)
+
+        for line in description_lines:
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+
+            leaf_name = parts[0].upper()
+            try:
+                port_num = int(parts[1])
+            except ValueError:
+                continue
+
+            description = ' '.join(parts[2:])
+
+            if leaf_name not in leaf_data:
+                leaf_data[leaf_name] = []
+            leaf_data[leaf_name].append((port_num, description))
+
+        # 5. Trier les leafs et créer le mapping automatique
+        # Plus petit nom de leaf → plus petit node_id
+        sorted_leaves = sorted(leaf_data.keys())
+        sorted_nodes = sorted([str(n) for n in node_to_leaf.keys()])
+
+        # Recréer le mapping basé sur le tri
+        auto_leaf_to_node = {}
+        for i, leaf in enumerate(sorted_leaves):
+            if i < len(sorted_nodes):
+                auto_leaf_to_node[leaf] = sorted_nodes[i]
+
+        print(f"\n   Mapping automatique leaf → node:")
+        for leaf, node in auto_leaf_to_node.items():
+            print(f"   • {leaf} → {node}")
+
+        # 6. Identifier smallest et largest node
+        if len(sorted_nodes) >= 2:
+            smallest_node = sorted_nodes[0]
+            largest_node = sorted_nodes[-1]
+        else:
+            smallest_node = sorted_nodes[0] if sorted_nodes else None
+            largest_node = sorted_nodes[0] if sorted_nodes else None
+
+        print(f"\n   Plus petite leaf ({sorted_leaves[0] if sorted_leaves else 'N/A'}) → node {smallest_node} → P3-IPG")
+        print(f"   Plus grosse leaf ({sorted_leaves[-1] if sorted_leaves else 'N/A'}) → node {largest_node} → P4-IPG")
+
+        # 7. Appliquer la logique paire/impaire
+        interface_mappings = []
+
+        for leaf_name, ports_data in leaf_data.items():
+            node_id = auto_leaf_to_node.get(leaf_name)
+
+            if not node_id:
+                # Essayer de matcher avec leaf_to_node original
+                node_id = leaf_to_node.get(leaf_name)
+
+            if not node_id:
+                print(f"   ⚠️  Leaf '{leaf_name}' non mappée, ignorée")
+                continue
+
+            for port_num, description in ports_data:
+                # Logique paire/impaire
+                if port_num % 2 == 1:
+                    # Port impair → P1_P2-IPG
+                    policy_group = ipg_p1p2
+                elif node_id == smallest_node:
+                    # Port pair, plus petit node → P3-IPG
+                    policy_group = ipg_p3
+                else:
+                    # Port pair, plus gros node → P4-IPG
+                    policy_group = ipg_p4
+
+                # Formater la description: (T:SRV E:{AVANT-TIRET} I:{APRÈS-TIRET})
+                desc_upper = description.upper()
+                if '-' in desc_upper:
+                    first_dash = desc_upper.index('-')
+                    e_part = desc_upper[:first_dash]
+                    i_part = desc_upper[first_dash+1:]
+                else:
+                    e_part = desc_upper
+                    i_part = ''
+                formatted_desc = f"(T:SRV E:{e_part} I:{i_part})"
+
+                interface_mappings.append({
+                    'node': node_id,
+                    'interface': f"1/{port_num}",
+                    'policy_group': policy_group,
+                    'role': 'leaf',
+                    'port_type': 'access',
+                    'interface_type': interface_type,
+                    'admin_state': 'up',
+                    'description': formatted_desc
+                })
+
+        # Trier par node puis par interface
+        interface_mappings.sort(key=lambda x: (x['node'], int(x['interface'].split('/')[1]) if '/' in x['interface'] else 0))
+
+        print(f"\n   ✅ {len(interface_mappings)} interfaces générées avec logique paire/impaire")
+
+        # Afficher un résumé par policy group
+        pg_counts = {}
+        for m in interface_mappings:
+            pg = m['policy_group']
+            pg_counts[pg] = pg_counts.get(pg, 0) + 1
+
+        print("\n   Répartition par Policy Group:")
+        for pg, count in sorted(pg_counts.items()):
+            print(f"   • {pg}: {count} interfaces")
+
+        return interface_mappings
+
+    def _finalize_interface_config(self, interface_mappings):
+        """
+        Finalise la création de l'onglet interface_config.
+
+        Args:
+            interface_mappings: Liste de dicts avec les données d'interface
+        """
+        if not interface_mappings:
+            print("   ⚠️  Aucune interface à créer")
+            return
+
+        # Créer le DataFrame
+        interface_config_df = pd.DataFrame(interface_mappings)
+        columns_order = ['node', 'interface', 'policy_group', 'role', 'port_type',
+                       'interface_type', 'admin_state', 'description']
+        interface_config_df = interface_config_df[columns_order]
+
+        # Ajouter le nouvel onglet interface_config
+        self.excel_data['interface_config'] = interface_config_df
+
+        # Supprimer les onglets sources
+        if 'interface_policy_leaf_profile' in self.excel_data:
+            del self.excel_data['interface_policy_leaf_profile']
+
+        if 'access_port_to_int_policy_leaf' in self.excel_data:
+            del self.excel_data['access_port_to_int_policy_leaf']
+
+        print("\n" + "=" * 60)
+        print("✅ INTERFACE_CONFIG GÉNÉRÉ")
+        print("=" * 60)
+        print(f"   • Lignes créées: {len(interface_mappings)}")
+        print(f"   • Onglets sources supprimés: interface_policy_leaf_profile, access_port_to_int_policy_leaf")
+        print(f"\n   Aperçu:")
+        print(interface_config_df.to_string(index=False, max_rows=10))
+
     def collect_interface_config_mappings(self):
         """Collecte les mappings pour convertir Interface Profile → Interface Config"""
         print("\n" + "=" * 60)
@@ -1347,6 +1639,26 @@ class FabricConverter:
         else:
             interface_type = 'switch_port'
             print("   → Type sélectionné: switch_port")
+
+        # 3b. Méthode d'assignation des interfaces
+        print("\n" + "-" * 60)
+        print("📐 MÉTHODE D'ASSIGNATION DES INTERFACES")
+        print("-" * 60)
+        print("[1] Logique paire/impaire (recommandé)")
+        print("    • Ports IMPAIRS → P1_P2-IPG (les 2 leafs)")
+        print("    • Ports PAIRS (petite leaf) → P3-IPG")
+        print("    • Ports PAIRS (grosse leaf) → P4-IPG")
+        print("[2] Saisie manuelle des interfaces")
+        print("\nChoix [1]: ", end="", flush=True)
+        method_choice = input().strip()
+
+        if method_choice != '2':
+            # Logique paire/impaire
+            interface_mappings = self._collect_odd_even_interfaces(profile_to_node, interface_type, access_port_df)
+            if interface_mappings:
+                # Aller directement à la création du DataFrame (étape 7)
+                self._finalize_interface_config(interface_mappings)
+            return
 
         # 4. Regrouper les interfaces par (interface_profile, policy_group)
         print("\n" + "-" * 60)
@@ -1540,31 +1852,7 @@ class FabricConverter:
                     print(f"\n   ✅ {updated_count} descriptions mises à jour")
 
         # 7. Créer le DataFrame et l'ajouter à l'Excel
-        if interface_mappings:
-            interface_config_df = pd.DataFrame(interface_mappings)
-            columns_order = ['node', 'interface', 'policy_group', 'role', 'port_type',
-                           'interface_type', 'admin_state', 'description']
-            interface_config_df = interface_config_df[columns_order]
-
-            # Ajouter le nouvel onglet interface_config
-            self.excel_data['interface_config'] = interface_config_df
-
-            # Supprimer les onglets sources
-            if 'interface_policy_leaf_profile' in self.excel_data:
-                del self.excel_data['interface_policy_leaf_profile']
-
-            if 'access_port_to_int_policy_leaf' in self.excel_data:
-                del self.excel_data['access_port_to_int_policy_leaf']
-
-            print("\n" + "=" * 60)
-            print("✅ INTERFACE_CONFIG GÉNÉRÉ")
-            print("=" * 60)
-            print(f"   • Lignes créées: {len(interface_mappings)}")
-            print(f"   • Onglets sources supprimés: interface_policy_leaf_profile, access_port_to_int_policy_leaf")
-            print(f"\n   Aperçu:")
-            print(interface_config_df.to_string(index=False, max_rows=10))
-        else:
-            print("   ⚠️  Aucune interface à créer - vérifiez les mappings")
+        self._finalize_interface_config(interface_mappings)
 
     # =========================================================================
     # MODE FICHIER DE CONFIGURATION (texte plat INI-style)
@@ -1730,8 +2018,10 @@ class FabricConverter:
         lines.append("[INTERFACE_CONFIG]")
         lines.append("# Conversion Interface Profile -> interface_config")
         lines.append("# enabled: true ou false")
+        lines.append("# method: odd_even (paire/impaire) ou manual (saisie manuelle)")
         lines.append("# interface_type: switch_port ou pc_or_vpc")
         lines.append("enabled = false")
+        lines.append("method = odd_even")
         lines.append("interface_type = switch_port")
         lines.append("")
 
@@ -1855,6 +2145,7 @@ class FabricConverter:
         # Parser interface_config
         ic_options = parse_mappings('INTERFACE_CONFIG')
         self.interface_config_enabled = ic_options.get('enabled', 'false').lower() in ['true', 'oui', 'yes', 'o']
+        self.interface_config_method = ic_options.get('method', 'odd_even').lower()
         self.interface_config_type = ic_options.get('interface_type', 'switch_port')
 
         self.interface_config_profile_to_node = parse_mappings('INTERFACE_CONFIG_PROFILE_TO_NODE')
@@ -1890,6 +2181,154 @@ class FabricConverter:
 
         return True
 
+    def _apply_odd_even_from_config(self, profile_to_node, interface_type, access_port_df):
+        """
+        Applique la logique paire/impaire depuis les données du fichier config.
+
+        Args:
+            profile_to_node: Dict {interface_profile: node_id}
+            interface_type: 'switch_port' ou 'pc_or_vpc'
+            access_port_df: DataFrame access_port_to_int_policy_leaf
+        """
+        # Vérifier que nous avons les données nécessaires
+        if not self.interface_config_node_to_leaf:
+            print("   ⚠️  Aucun mapping node→leaf défini dans [INTERFACE_CONFIG_NODE_TO_LEAF]")
+            return
+
+        if not self.interface_config_descriptions:
+            print("   ⚠️  Aucune description définie dans [INTERFACE_CONFIG_DESCRIPTIONS]")
+            return
+
+        # Détecter les policy groups
+        cluster_name, ipg_p1p2, ipg_p3, ipg_p4 = self._detect_policy_groups(access_port_df)
+
+        if not (ipg_p1p2 and ipg_p3 and ipg_p4):
+            print("   ⚠️  Policy Groups P1_P2/P3/P4 non détectés automatiquement")
+            print("      Utilisez le mode wizard pour spécifier le nom du cluster")
+            return
+
+        print(f"   Policy Groups détectés:")
+        print(f"   • {ipg_p1p2} (impairs)")
+        print(f"   • {ipg_p3} (pairs, petite leaf)")
+        print(f"   • {ipg_p4} (pairs, grosse leaf)")
+
+        # Inverser le mapping: node_to_leaf → leaf_to_node
+        node_to_leaf = self.interface_config_node_to_leaf
+        leaf_to_node = {v.upper(): k for k, v in node_to_leaf.items()}
+
+        # Parser les descriptions
+        leaf_data = {}  # leaf_name -> list of (port, description)
+
+        for line in self.interface_config_descriptions:
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+
+            leaf_name = parts[0].upper()
+            try:
+                port_num = int(parts[1])
+            except ValueError:
+                continue
+
+            description = ' '.join(parts[2:])
+
+            if leaf_name not in leaf_data:
+                leaf_data[leaf_name] = []
+            leaf_data[leaf_name].append((port_num, description))
+
+        if not leaf_data:
+            print("   ⚠️  Aucune interface parsée depuis les descriptions")
+            return
+
+        # Trier les leafs et créer le mapping automatique
+        sorted_leaves = sorted(leaf_data.keys())
+        sorted_nodes = sorted([str(n) for n in node_to_leaf.keys()])
+
+        # Recréer le mapping basé sur le tri
+        auto_leaf_to_node = {}
+        for i, leaf in enumerate(sorted_leaves):
+            if i < len(sorted_nodes):
+                auto_leaf_to_node[leaf] = sorted_nodes[i]
+
+        print(f"\n   Mapping automatique leaf → node:")
+        for leaf, node in auto_leaf_to_node.items():
+            print(f"   • {leaf} → {node}")
+
+        # Identifier smallest et largest node
+        if len(sorted_nodes) >= 2:
+            smallest_node = sorted_nodes[0]
+            largest_node = sorted_nodes[-1]
+        else:
+            smallest_node = sorted_nodes[0] if sorted_nodes else None
+            largest_node = sorted_nodes[0] if sorted_nodes else None
+
+        print(f"\n   Plus petite leaf ({sorted_leaves[0] if sorted_leaves else 'N/A'}) → node {smallest_node} → P3-IPG")
+        print(f"   Plus grosse leaf ({sorted_leaves[-1] if sorted_leaves else 'N/A'}) → node {largest_node} → P4-IPG")
+
+        # Appliquer la logique paire/impaire
+        interface_mappings = []
+
+        for leaf_name, ports_data in leaf_data.items():
+            node_id = auto_leaf_to_node.get(leaf_name)
+
+            if not node_id:
+                # Essayer de matcher avec leaf_to_node original
+                node_id = leaf_to_node.get(leaf_name)
+
+            if not node_id:
+                print(f"   ⚠️  Leaf '{leaf_name}' non mappée, ignorée")
+                continue
+
+            for port_num, description in ports_data:
+                # Logique paire/impaire
+                if port_num % 2 == 1:
+                    # Port impair → P1_P2-IPG
+                    policy_group = ipg_p1p2
+                elif node_id == smallest_node:
+                    # Port pair, plus petit node → P3-IPG
+                    policy_group = ipg_p3
+                else:
+                    # Port pair, plus gros node → P4-IPG
+                    policy_group = ipg_p4
+
+                # Formater la description: (T:SRV E:{AVANT-TIRET} I:{APRÈS-TIRET})
+                desc_upper = description.upper()
+                if '-' in desc_upper:
+                    first_dash = desc_upper.index('-')
+                    e_part = desc_upper[:first_dash]
+                    i_part = desc_upper[first_dash+1:]
+                else:
+                    e_part = desc_upper
+                    i_part = ''
+                formatted_desc = f"(T:SRV E:{e_part} I:{i_part})"
+
+                interface_mappings.append({
+                    'node': node_id,
+                    'interface': f"1/{port_num}",
+                    'policy_group': policy_group,
+                    'role': 'leaf',
+                    'port_type': 'access',
+                    'interface_type': interface_type,
+                    'admin_state': 'up',
+                    'description': formatted_desc
+                })
+
+        # Trier par node puis par interface
+        interface_mappings.sort(key=lambda x: (x['node'], int(x['interface'].split('/')[1]) if '/' in x['interface'] else 0))
+
+        # Afficher un résumé par policy group
+        pg_counts = {}
+        for m in interface_mappings:
+            pg = m['policy_group']
+            pg_counts[pg] = pg_counts.get(pg, 0) + 1
+
+        print(f"\n   Répartition par Policy Group:")
+        for pg, count in sorted(pg_counts.items()):
+            print(f"   • {pg}: {count} interfaces")
+
+        # Finaliser
+        self._finalize_interface_config(interface_mappings)
+
     def apply_interface_config_from_file(self):
         """Applique la conversion interface_config depuis les données du fichier config"""
         if not self.interface_config_enabled:
@@ -1914,6 +2353,15 @@ class FabricConverter:
         profile_to_node = self.interface_config_profile_to_node
         interface_type = self.interface_config_type
         access_port_df = self.excel_data['access_port_to_int_policy_leaf']
+
+        # Vérifier la méthode
+        if self.interface_config_method == 'odd_even':
+            # Utiliser la logique paire/impaire
+            print(f"   Méthode: logique paire/impaire")
+            self._apply_odd_even_from_config(profile_to_node, interface_type, access_port_df)
+            return
+
+        print(f"   Méthode: manuelle")
 
         # Regrouper les interfaces par (interface_profile, policy_group)
         grouped = {}
