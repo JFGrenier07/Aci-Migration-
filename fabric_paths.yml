@@ -1,0 +1,38 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#                    CONFIGURATION DES FABRICS ACI
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Format:
+#   NOM_FABRIC: /chemin/vers/repertoire/backups/
+#
+# Le script cherchera le backup le plus recent (par date dans le nom)
+# Format attendu: *-YYYY-MM-DDTHH-MM-SS.tar.gz
+#
+# Pour ajouter une fabric: ajouter une ligne NOM: /path/
+# ═══════════════════════════════════════════════════════════════════════════
+
+fabrics:
+  FAB-TEST-MIGRATION: /home/jfg/ai/aci/ansible_csv/migration/
+  FAB-PROD-MTL-01: /data/aci_backups/prod-mtl-01/
+  FAB-PROD-MTL-02: /data/aci_backups/prod-mtl-02/
+  FAB-PROD-TOR-01: /data/aci_backups/prod-tor-01/
+  FAB-PROD-TOR-02: /data/aci_backups/prod-tor-02/
+  FAB-PROD-VAN-01: /data/aci_backups/prod-van-01/
+  FAB-DEV-01: /data/aci_backups/dev-01/
+  FAB-DEV-02: /data/aci_backups/dev-02/
+  FAB-QA-01: /data/aci_backups/qa-01/
+  FAB-DR-MTL-01: /data/aci_backups/dr-mtl-01/
+  FAB-DR-TOR-01: /data/aci_backups/dr-tor-01/
+  FAB-LAB-01: /data/aci_backups/lab-01/
+  FAB-LAB-02: /data/aci_backups/lab-02/
+  FAB-DMZ-01: /data/aci_backups/dmz-01/
+  FAB-CORE-01: /data/aci_backups/core-01/
+  FAB-EDGE-01: /data/aci_backups/edge-01/
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                    CSV INVENTAIRE (placeholder)
+# ═══════════════════════════════════════════════════════════════════════════
+
+inventory_csv:
+  vlans: /data/inventory/vlans.csv
+  circuits: /data/inventory/circuits.csv
