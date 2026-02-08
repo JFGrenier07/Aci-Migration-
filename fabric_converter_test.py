@@ -231,47 +231,68 @@ def group_tenants_by_prefix(tenants: list) -> dict:
 # FONCTIONS DE RECHERCHE L3OUT
 # =============================================================================
 
+def get_l3out_vrf(l3out: dict) -> str:
+    """
+    Récupère le nom de la VRF associée à un L3Out.
+    Cherche dans children → l3extRsEctx → tnFvCtxName
+    """
+    children = l3out.get('children', [])
+    for child in children:
+        if 'l3extRsEctx' in child:
+            return child['l3extRsEctx'].get('attributes', {}).get('tnFvCtxName', '')
+    return ''
+
+
+def tenant_to_vrf(tenant: str) -> str:
+    """Convertit un nom de tenant en nom de VRF (-TN → -VRF)."""
+    if tenant.upper().endswith('-TN'):
+        return tenant[:-3] + '-VRF'
+    return tenant + '-VRF'
+
+
 def find_ns_l3out(aci_data: dict, tenant_ol: str) -> str:
     """
     Trouve le L3Out Nord-Sud dans le tenant overlay.
     Le premier mot commence par 'B' et contient '-NS-' dans le nom.
+    Vérifie que la VRF correspond au tenant overlay.
     """
     l3outs = find_objects(aci_data, 'l3extOut')
-    tenant_ol_upper = tenant_ol.upper()
+    expected_vrf = tenant_to_vrf(tenant_ol).upper()
 
     for l3out in l3outs:
-        dn = get_object_attribute(l3out, 'dn', '').upper()
         name = get_object_attribute(l3out, 'name', '')
-
-        # Vérifier que c'est dans le bon tenant (insensible à la casse)
-        if f'/TN-{tenant_ol_upper}/' not in dn:
-            continue
 
         # Vérifier: premier mot commence par B ET contient -NS-
         name_upper = name.upper()
         first_word = name_upper.split('-')[0] if '-' in name_upper else name_upper
 
         if first_word.startswith('B') and '-NS-' in name_upper:
-            return name
+            # Vérifier la VRF
+            l3out_vrf = get_l3out_vrf(l3out).upper()
+            if l3out_vrf == expected_vrf:
+                return name
 
     return ''
 
 
 def find_dci_l3out(aci_data: dict, tenant: str) -> str:
-    """Trouve le L3Out DCI dans un tenant donné (commence par 'DCI')."""
+    """
+    Trouve le L3Out DCI dans un tenant donné.
+    - Commence par 'DCI'
+    - Vérifie que la VRF correspond au tenant
+    """
     l3outs = find_objects(aci_data, 'l3extOut')
-    tenant_upper = tenant.upper()
+    expected_vrf = tenant_to_vrf(tenant).upper()
 
     for l3out in l3outs:
-        dn = get_object_attribute(l3out, 'dn', '').upper()
         name = get_object_attribute(l3out, 'name', '')
+        name_upper = name.upper()
 
-        # Vérifier que c'est dans le bon tenant (insensible à la casse)
-        if f'/TN-{tenant_upper}/' not in dn:
-            continue
-
-        if name.upper().startswith('DCI'):
-            return name
+        if name_upper.startswith('DCI'):
+            # Vérifier la VRF
+            l3out_vrf = get_l3out_vrf(l3out).upper()
+            if l3out_vrf == expected_vrf:
+                return name
 
     return ''
 
@@ -700,16 +721,22 @@ class FabricConverter:
         print(f"   Recherche dans tenant OL: {tenant_ol}")
         print(f"   Recherche dans tenant UL: {tenant_ul}")
 
-        # Debug: afficher tous les L3Outs trouvés
+        # Debug: afficher tous les L3Outs trouvés avec leur VRF
         all_l3outs = find_objects(self.dest_aci_data, 'l3extOut')
         print(f"   Total L3Outs trouvés dans backup: {len(all_l3outs)}")
+
+        # Calculer les VRF attendues
+        expected_vrf_ol = tenant_to_vrf(tenant_ol)
+        expected_vrf_ul = tenant_to_vrf(tenant_ul)
+        print(f"   VRF attendue OL: {expected_vrf_ol}")
+        print(f"   VRF attendue UL: {expected_vrf_ul}")
 
         if all_l3outs:
             print("   Liste des L3Outs:")
             for l3out in all_l3outs[:10]:  # Limiter à 10 pour l'affichage
                 name = get_object_attribute(l3out, 'name', '?')
-                dn = get_object_attribute(l3out, 'dn', '?')
-                print(f"      • {name} (dn: {dn[:60]}...)")
+                vrf = get_l3out_vrf(l3out)
+                print(f"      • {name} (VRF: {vrf})")
 
         ns_l3out = find_ns_l3out(self.dest_aci_data, tenant_ol)
         dci_ol_l3out = find_dci_l3out(self.dest_aci_data, tenant_ol)
