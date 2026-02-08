@@ -141,15 +141,25 @@ def build_class_index(aci_data: dict) -> dict:
 
 
 def find_objects(aci_data: dict, target_class: str) -> list:
-    """Recherche tous les objets d'une classe ACI spécifique."""
+    """Recherche tous les objets d'une classe ACI spécifique (insensible à la casse)."""
+    target_lower = target_class.lower()
+
+    # Chercher dans l'index (avec correspondance insensible à la casse)
     if '_index' in aci_data:
-        return aci_data['_index'].get(target_class, [])
+        # Chercher la clé exacte d'abord
+        if target_class in aci_data['_index']:
+            return aci_data['_index'][target_class]
+        # Sinon chercher en ignorant la casse
+        for key in aci_data['_index']:
+            if key.lower() == target_lower:
+                return aci_data['_index'][key]
+        return []
 
     found = []
     def search_recursive(obj):
         if isinstance(obj, dict):
             for key, value in obj.items():
-                if key == target_class:
+                if key.lower() == target_lower:
                     found.append(value)
                 if isinstance(value, (dict, list)):
                     search_recursive(value)
@@ -227,13 +237,14 @@ def find_ns_l3out(aci_data: dict, tenant_ol: str) -> str:
     Le premier mot commence par 'B' et contient '-NS-' dans le nom.
     """
     l3outs = find_objects(aci_data, 'l3extOut')
+    tenant_ol_upper = tenant_ol.upper()
 
     for l3out in l3outs:
-        dn = get_object_attribute(l3out, 'dn', '')
+        dn = get_object_attribute(l3out, 'dn', '').upper()
         name = get_object_attribute(l3out, 'name', '')
 
-        # Vérifier que c'est dans le bon tenant
-        if f'/tn-{tenant_ol}/' not in dn and f'/tn-{tenant_ol.upper()}/' not in dn.upper():
+        # Vérifier que c'est dans le bon tenant (insensible à la casse)
+        if f'/TN-{tenant_ol_upper}/' not in dn:
             continue
 
         # Vérifier: premier mot commence par B ET contient -NS-
@@ -249,12 +260,14 @@ def find_ns_l3out(aci_data: dict, tenant_ol: str) -> str:
 def find_dci_l3out(aci_data: dict, tenant: str) -> str:
     """Trouve le L3Out DCI dans un tenant donné (commence par 'DCI')."""
     l3outs = find_objects(aci_data, 'l3extOut')
+    tenant_upper = tenant.upper()
 
     for l3out in l3outs:
-        dn = get_object_attribute(l3out, 'dn', '')
+        dn = get_object_attribute(l3out, 'dn', '').upper()
         name = get_object_attribute(l3out, 'name', '')
 
-        if f'/tn-{tenant}/' not in dn and f'/tn-{tenant.upper()}/' not in dn.upper():
+        # Vérifier que c'est dans le bon tenant (insensible à la casse)
+        if f'/TN-{tenant_upper}/' not in dn:
             continue
 
         if name.upper().startswith('DCI'):
@@ -684,16 +697,37 @@ class FabricConverter:
         tenant_ol = self.tenant_group['overlay_tenant']
         tenant_ul = self.tenant_group['underlay_tenant']
 
+        print(f"   Recherche dans tenant OL: {tenant_ol}")
+        print(f"   Recherche dans tenant UL: {tenant_ul}")
+
+        # Debug: afficher tous les L3Outs trouvés
+        all_l3outs = find_objects(self.dest_aci_data, 'l3extOut')
+        print(f"   Total L3Outs trouvés dans backup: {len(all_l3outs)}")
+
+        if all_l3outs:
+            print("   Liste des L3Outs:")
+            for l3out in all_l3outs[:10]:  # Limiter à 10 pour l'affichage
+                name = get_object_attribute(l3out, 'name', '?')
+                dn = get_object_attribute(l3out, 'dn', '?')
+                print(f"      • {name} (dn: {dn[:60]}...)")
+
         ns_l3out = find_ns_l3out(self.dest_aci_data, tenant_ol)
         dci_ol_l3out = find_dci_l3out(self.dest_aci_data, tenant_ol)
         dci_ul_l3out = find_dci_l3out(self.dest_aci_data, tenant_ul)
 
+        print("\n   Résultats de la recherche:")
         if ns_l3out:
-            print(f"   N/S L3Out (overlay): {ns_l3out}")
+            print(f"   ✅ N/S L3Out (overlay): {ns_l3out}")
+        else:
+            print(f"   ❌ N/S L3Out: non trouvé (cherche: 1er mot commence par B ET contient -NS-)")
         if dci_ol_l3out:
-            print(f"   DCI L3Out (overlay): {dci_ol_l3out}")
+            print(f"   ✅ DCI L3Out (overlay): {dci_ol_l3out}")
+        else:
+            print(f"   ❌ DCI L3Out (overlay): non trouvé (cherche: commence par DCI)")
         if dci_ul_l3out:
-            print(f"   DCI L3Out (underlay): {dci_ul_l3out}")
+            print(f"   ✅ DCI L3Out (underlay): {dci_ul_l3out}")
+        else:
+            print(f"   ❌ DCI L3Out (underlay): non trouvé (cherche: commence par DCI)")
 
         # Stocker pour utilisation dans collect_bd_to_l3out_mappings
         self._backup_l3outs = {
