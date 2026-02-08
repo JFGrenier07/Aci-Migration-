@@ -1085,10 +1085,23 @@ class FabricConverter:
         print("🔗 CONVERSION DES L3OUT (bd_to_l3out)")
         print("=" * 60)
         print("L3Out référencés par les Bridge Domains")
-        print("(Appuyez sur Entrée pour utiliser la suggestion)")
 
         # Récupérer les suggestions du backup (si disponible)
         backup_l3outs = getattr(self, '_backup_l3outs', {})
+
+        # Afficher les L3Outs trouvés dans le backup
+        if backup_l3outs and any(backup_l3outs.values()):
+            print("\n   📦 L3Outs trouvés dans le backup destination:")
+            if backup_l3outs.get('ns'):
+                print(f"      • N/S (Overlay):  {backup_l3outs['ns']}")
+            if backup_l3outs.get('dci_ol'):
+                print(f"      • DCI (Overlay):  {backup_l3outs['dci_ol']}")
+            if backup_l3outs.get('dci_ul'):
+                print(f"      • DCI (Underlay): {backup_l3outs['dci_ul']}")
+        else:
+            print("\n   ⚠️  Aucun L3Out trouvé dans le backup (mode manuel)")
+
+        print("\n   (Appuyez sur Entrée pour utiliser la suggestion du backup)")
 
         # Afficher le contexte pour chaque L3Out
         for l3out in unique_l3outs:
@@ -1097,45 +1110,65 @@ class FabricConverter:
             matching_rows = df[mask]
 
             print(f"\n   {'─' * 56}")
-            print(f"   📍 L3Out: [{l3out}]")
-            print(f"      ┌─ Onglet: bd_to_l3out")
-            print(f"      │  Colonnes: {', '.join(str(h) for h in df.columns)}")
 
-            # Afficher les BDs qui utilisent ce L3Out
-            bd_list = matching_rows['bridge_domain'].tolist() if 'bridge_domain' in columns_lower else []
-            tenant_list = matching_rows['tenant'].tolist() if 'tenant' in columns_lower else []
-
-            if bd_list:
-                for i, (tenant, bd) in enumerate(zip(tenant_list[:3], bd_list[:3])):
-                    print(f"      │  BD {i+1}: {tenant}/{bd}")
-                if len(bd_list) > 3:
-                    print(f"      │  ... et {len(bd_list) - 3} autres BDs")
-
-            print(f"      └─ Total: {len(matching_rows)} Bridge Domain(s) référencent ce L3Out")
+            # Détecter le tenant associé (OL ou UL)
+            tenant_context = ""
+            if 'tenant' in columns_lower:
+                tenants = matching_rows['tenant'].tolist()
+                if tenants:
+                    first_tenant = str(tenants[0]).upper()
+                    if '-OL-' in first_tenant:
+                        tenant_context = " (Overlay)"
+                    elif '-UL-' in first_tenant:
+                        tenant_context = " (Underlay)"
 
             # Déterminer la suggestion depuis le backup
             suggestion = l3out  # Par défaut: garder la même valeur
             l3out_upper = l3out.upper()
+            l3out_type = ""
 
             if backup_l3outs:
                 # Détecter le type de L3Out par le nom source
                 first_word = l3out_upper.split('-')[0] if '-' in l3out_upper else l3out_upper
 
                 if first_word.startswith('B') and '-NS-' in l3out_upper:
-                    # C'est un L3Out N/S
+                    # C'est un L3Out N/S (toujours dans Overlay)
+                    l3out_type = "N/S"
                     if backup_l3outs.get('ns'):
                         suggestion = backup_l3outs['ns']
-                        print(f"      💡 Suggestion (N/S): {suggestion}")
                 elif l3out_upper.startswith('DCI'):
-                    # C'est un L3Out DCI - vérifier OL ou UL
-                    if '-OL-' in l3out_upper or self._is_overlay_context(l3out, df, matching_rows):
+                    # C'est un L3Out DCI - vérifier OL ou UL par le tenant associé
+                    if '-OL-' in l3out_upper or tenant_context == " (Overlay)":
+                        l3out_type = "DCI-OL"
                         if backup_l3outs.get('dci_ol'):
                             suggestion = backup_l3outs['dci_ol']
-                            print(f"      💡 Suggestion (DCI OL): {suggestion}")
                     else:
+                        l3out_type = "DCI-UL"
                         if backup_l3outs.get('dci_ul'):
                             suggestion = backup_l3outs['dci_ul']
-                            print(f"      💡 Suggestion (DCI UL): {suggestion}")
+
+            # Affichage amélioré avec type détecté
+            type_info = f" [{l3out_type}]" if l3out_type else ""
+            print(f"   📍 L3Out Excel: {l3out}{type_info}{tenant_context}")
+            print(f"      → Suggestion Backup: {suggestion}")
+
+            # Afficher les BDs qui utilisent ce L3Out
+            bd_col = None
+            for col_name in ['bd', 'bridge_domain']:
+                if col_name in columns_lower:
+                    idx = columns_lower.index(col_name)
+                    bd_col = df.columns[idx]
+                    break
+
+            if bd_col:
+                bd_list = matching_rows[bd_col].tolist()
+                tenant_list = matching_rows['tenant'].tolist() if 'tenant' in columns_lower else []
+                if bd_list:
+                    print(f"      BDs: {', '.join(str(b) for b in bd_list[:3])}", end="")
+                    if len(bd_list) > 3:
+                        print(f" ... (+{len(bd_list) - 3})")
+                    else:
+                        print()
 
             dest = self.prompt_mapping("L3Out", l3out, suggestion)
             self.l3out_mapping[l3out] = dest
